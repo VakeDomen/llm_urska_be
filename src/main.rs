@@ -1,15 +1,25 @@
 use std::io::Write;
 
 use anyhow::{Error, Result};
-use candle_core::{self, quantized::gguf_file::Content, Device};
+use candle_core::{self, quantized::gguf_file::Content, Device, Tensor};
 use tokenizers::Tokenizer;
-use candle_transformers::models::quantized_llama as model;
+use candle_transformers::{generation::{LogitsProcessor, Sampling}, models::quantized_llama as model};
 use model::ModelWeights;
 
-const DEFAULT_PROMPT: &str = "How do i enroll into next year CS?";
+const DEFAULT_PROMPT: &str = "What is your name and your purpose?";
 const SYSTEM_MSG: &str = "You are a student assistant named Urška. Help the student with his question:";
+
+const SEED: u64 = 42;
+
+const TEMPERATURE: f64 = 0.1;
+const SAMPLE_LEN: usize = 500;
+const TOP_K: Option<usize> = None;
+const TOP_P: Option<f64> = None;
+
 const VERBOSE_PROMPT: bool = true;
-const SAMPLE_LEN: usize = 1000;
+const SPLIT_PROPMT: bool = false;
+const REPEAT_PENALTY: f32 = 1.1;
+const REPEAT_LAST_N: usize = 64;
 
 #[derive(Debug)]
 enum Prompt {
@@ -58,7 +68,7 @@ fn main() {
 
     let prompt = Prompt::One(DEFAULT_PROMPT.to_string());
 
-    match prompt_model(model, tokenizer, prompt) {
+    match prompt_model(model, tokenizer, prompt, &device) {
         Ok(out) => println!("{}", out),
         Err(e) => panic!("Can't prompt model: {:#?}", e),
     }
@@ -67,12 +77,12 @@ fn main() {
 }
 
 
-fn prompt_model(model: ModelWeights, tokenizer: Tokenizer, prompt: Prompt) -> Result<String> {
-    // let mut pre_prompt_tokens = vec![];
+fn prompt_model(mut model: ModelWeights, tokenizer: Tokenizer, prompt: Prompt, device: &Device) -> Result<String> {
+    let mut pre_prompt_tokens = vec![];
     let mut tos = TokenOutputStream::new(tokenizer);
    
-//    for prompt_index in 0.. {
-        let prompt_str = parse_prompt_to_raw(prompt)?;
+   for prompt_index in 0.. {
+        let prompt_str = parse_prompt_to_raw(&prompt)?;
         print!("{}", &prompt_str);
         let tokens = tos
             .tokenizer()
@@ -85,14 +95,113 @@ fn prompt_model(model: ModelWeights, tokenizer: Tokenizer, prompt: Prompt) -> Re
                 println!("{id:7} -> '{token}'");
             }
         }
-
+        let prompt_tokens = [&pre_prompt_tokens, tokens.get_ids()].concat();
+        let to_sample = SAMPLE_LEN.saturating_sub(1);
         
-    // }
+        let prompt_tokens = if prompt_tokens.len() + to_sample > model::MAX_SEQ_LEN - 10 {
+            let to_remove = prompt_tokens.len() + to_sample + 10 - model::MAX_SEQ_LEN;
+            prompt_tokens[prompt_tokens.len().saturating_sub(to_remove)..].to_vec()
+        } else {
+            prompt_tokens
+        };
+        
+        let mut all_tokens = vec![];
+        let mut logits_processor = {
+            
+            let sampling = if TEMPERATURE <= 0. {
+                Sampling::ArgMax
+            } else {
+                match (TOP_K, TOP_P) {
+                    (None, None) => Sampling::All { temperature: TEMPERATURE },
+                    (Some(k), None) => Sampling::TopK { k, temperature: TEMPERATURE },
+                    (None, Some(p)) => Sampling::TopP { p, temperature: TEMPERATURE },
+                    (Some(k), Some(p)) => Sampling::TopKThenTopP { k, p,temperature:  TEMPERATURE },
+                }
+            };
+            LogitsProcessor::from_sampling(SEED, sampling)
+        };
 
-    Ok("HEY".to_string())
+        let start_prompt_processing = std::time::Instant::now();
+        let mut next_token = if !SPLIT_PROPMT {
+            let input = Tensor::new(prompt_tokens.as_slice(), device)?.unsqueeze(0)?;
+            let logits = model.forward(&input, 0)?;
+            let logits = logits.squeeze(0)?;
+            logits_processor.sample(&logits)?
+        } else {
+            let mut next_token = 0;
+            for (pos, token) in prompt_tokens.iter().enumerate() {
+                let input = Tensor::new(&[*token], &device)?.unsqueeze(0)?;
+                let logits = model.forward(&input, pos)?;
+                let logits = logits.squeeze(0)?;
+                next_token = logits_processor.sample(&logits)?
+            }
+            next_token
+        };
+        let prompt_dt = start_prompt_processing.elapsed();
+        all_tokens.push(next_token);
+        if let Some(t) = tos.next_token(next_token)? {
+            print!("{t}");
+            std::io::stdout().flush()?;
+        }
+
+        let eos_token = "<|end_of_text|>";
+        let eos_token = *tos.tokenizer().get_vocab(true).get(eos_token).unwrap();
+        let start_post_prompt = std::time::Instant::now();
+        let mut sampled = 0;
+        for index in 0..to_sample {
+            let input = Tensor::new(&[next_token], &device)?.unsqueeze(0)?;
+            let logits = model.forward(&input, prompt_tokens.len() + index)?;
+            let logits = logits.squeeze(0)?;
+            let logits = if REPEAT_PENALTY == 1. {
+                logits
+            } else {
+                let start_at = all_tokens.len().saturating_sub(REPEAT_LAST_N);
+                candle_transformers::utils::apply_repeat_penalty(
+                    &logits,
+                    REPEAT_PENALTY,
+                    &all_tokens[start_at..],
+                )?
+            };
+            next_token = logits_processor.sample(&logits)?;
+            all_tokens.push(next_token);
+            if let Some(t) = tos.next_token(next_token)? {
+                print!("{t}");
+                std::io::stdout().flush()?;
+            }
+            sampled += 1;
+            if next_token == eos_token {
+                break;
+            };
+        }
+        if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
+            print!("{rest}");
+        }
+        std::io::stdout().flush()?;
+        let dt = start_post_prompt.elapsed();
+        println!(
+            "\n\n{:4} prompt tokens processed: {:.2} token/s",
+            prompt_tokens.len(),
+            prompt_tokens.len() as f64 / prompt_dt.as_secs_f64(),
+        );
+        println!(
+            "{sampled:4} tokens generated: {:.2} token/s",
+            sampled as f64 / dt.as_secs_f64(),
+        );
+
+        match prompt {
+            Prompt::One(_) => break,
+            Prompt::Interactive => {}
+            Prompt::Chat => {
+                pre_prompt_tokens = [prompt_tokens.as_slice(), all_tokens.as_slice()].concat()
+            }
+        }
+        
+    }
+
+    Ok("DONE".to_string())
 }
 
-fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
+fn parse_prompt_to_raw(prompt: &Prompt) -> Result<String> {
     match &prompt {
         Prompt::One(prompt) => Ok(llama3_prompt(prompt.clone())),
         Prompt::Interactive | Prompt::Chat => {

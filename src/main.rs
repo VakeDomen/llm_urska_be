@@ -1,11 +1,15 @@
+use std::io::Write;
+
 use anyhow::{Error, Result};
 use candle_core::{self, quantized::gguf_file::Content, Device};
 use tokenizers::Tokenizer;
 use candle_transformers::models::quantized_llama as model;
 use model::ModelWeights;
 
-const DEFAULT_PROMPT: &str = "My favorite theorem is ";
-
+const DEFAULT_PROMPT: &str = "How do i enroll into next year CS?";
+const SYSTEM_MSG: &str = "You are a student assistant named Urška. Help the student with his question:";
+const VERBOSE_PROMPT: bool = true;
+const SAMPLE_LEN: usize = 1000;
 
 #[derive(Debug)]
 enum Prompt {
@@ -42,37 +46,98 @@ fn main() {
         },
     };
 
-    let _tokenizer = match tokenizer("models/llama3-8b/tokenizer.json") {
+    let tokenizer = match tokenizer("models/llama3-8b/tokenizer.json") {
         Ok(t) => t,
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };
 
-    let _model = match  model("models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf", &device) { 
+    let model = match  model("models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf", &device) { 
         Ok(m) => m,
         Err(e) => panic!("Can't load model: {:#?}", e),
     };
 
+    let prompt = Prompt::One(DEFAULT_PROMPT.to_string());
+
+    match prompt_model(model, tokenizer, prompt) {
+        Ok(out) => println!("{}", out),
+        Err(e) => panic!("Can't prompt model: {:#?}", e),
+    }
+    
+
 }
 
-fn tokenizer(tokenizer: &str) -> Result<Tokenizer> {
-    let tokenizer_path = std::path::PathBuf::from(tokenizer);
+
+fn prompt_model(model: ModelWeights, tokenizer: Tokenizer, prompt: Prompt) -> Result<String> {
+    // let mut pre_prompt_tokens = vec![];
+    let mut tos = TokenOutputStream::new(tokenizer);
+   
+//    for prompt_index in 0.. {
+        let prompt_str = parse_prompt_to_raw(prompt)?;
+        print!("{}", &prompt_str);
+        let tokens = tos
+            .tokenizer()
+            .encode(prompt_str, true)
+            .map_err(anyhow::Error::msg)?;
+        
+        if VERBOSE_PROMPT {
+            for (token, id) in tokens.get_tokens().iter().zip(tokens.get_ids().iter()) {
+                let token = token.replace('▁', " ").replace("<0x0A>", "\n");
+                println!("{id:7} -> '{token}'");
+            }
+        }
+
+        
+    // }
+
+    Ok("HEY".to_string())
+}
+
+fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
+    match &prompt {
+        Prompt::One(prompt) => Ok(llama3_prompt(prompt.clone())),
+        Prompt::Interactive | Prompt::Chat => {
+            let is_interactive = matches!(prompt, Prompt::Interactive);
+            print!("> ");
+            std::io::stdout().flush()?;
+            let mut prompt = String::new();
+            std::io::stdin().read_line(&mut prompt)?;
+            if prompt.ends_with('\n') {
+                prompt.pop();
+                if prompt.ends_with('\r') {
+                    prompt.pop();
+                }
+            }
+            Ok(llama3_prompt(prompt))
+        }
+    }
+}
+
+fn llama3_prompt(user_msg: String) -> String {
+    format!(
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
+        SYSTEM_MSG,
+        user_msg
+    )
+}
+
+fn tokenizer(tokenizer_path: &str) -> Result<Tokenizer> {
+    let tokenizer_path = std::path::PathBuf::from(tokenizer_path);
     Tokenizer::from_file(tokenizer_path).map_err(Error::msg)
 }
 
-fn model(model_name: &str, device: &Device) -> Result<ModelWeights> {
-    let model_path = std::path::PathBuf::from(model_name);
+fn model(model_path: &str, device: &Device) -> Result<ModelWeights> {
+    let model_path = std::path::PathBuf::from(model_path);
     let mut file = std::fs::File::open(&model_path)?;
     let start = std::time::Instant::now();
     
     let model: Content = Content::read(&mut file).map_err(|e| e.with_path(model_path))?;
-    for (_, tensor) in model.tensor_infos.iter() {
-        let elem_count = tensor.shape.elem_count();
-    }
+    
     println!(
-        "loaded {:?} tensors in {:.2}s",
+        "Loaded {:?} tensors in {:.2}s",
         model.tensor_infos.len(),
         start.elapsed().as_secs_f32(),
     );
+    
     let weights = ModelWeights::from_gguf(model, &mut file, device)?;
     Ok(weights)
 }

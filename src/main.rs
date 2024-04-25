@@ -1,17 +1,17 @@
-use std::io::Write;
 
-use anyhow::{Error, Result};
-use candle_core::{self, Device, Tensor};
-use llm::tokenizer::TokenOutputStream;
-use tokenizers::Tokenizer;
-use candle_transformers::{generation::{LogitsProcessor, Sampling}, models::quantized_llama as model};
-use model::ModelWeights;
+use candle_core::{self, Device};
 
-use crate::{config::DEFAULT_PROMPT, llm::{model::load_model, prompt::{prompt_model, Prompt}, tokenizer::load_tokenizer}};
+use crate::{
+    config::DEFAULT_PROMPT, 
+    llm::{
+        model::load_model,
+        prompt::{prompt_model, Prompt}, 
+        tokenizer::load_tokenizer
+    }
+};
 
 mod llm;
 mod config;
-
 
 
 fn main() {
@@ -36,7 +36,7 @@ fn main() {
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };
 
-    let model = match  load_model("models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf", &device) { 
+    let model = match load_model("models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf", &device) { 
         Ok(m) => m,
         Err(e) => panic!("Can't load model: {:#?}", e),
     };

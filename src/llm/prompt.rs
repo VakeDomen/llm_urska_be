@@ -86,7 +86,7 @@ pub fn prompt_model(
    
     // Parse the prompt to a raw string format.
     let prompt_str = parse_prompt_to_raw(&prompt)?;
-    
+    println!("PROPMPT: {:#?}", prompt_str);
     // Tokenize the prompt string for model processing.
     let tokens = tos
         .tokenizer()

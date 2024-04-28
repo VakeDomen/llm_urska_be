@@ -1,3 +1,4 @@
+use llm::prompt::{prompt_model, Prompt};
 use logging::logger::init_logging;
 use wss::server::start_server;
 use anyhow::Result;

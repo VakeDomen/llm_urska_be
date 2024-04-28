@@ -1,5 +1,5 @@
 // WSS Config
-pub const LISTEN_ADDRESS: &str = "127.0.0.1:8080";
+pub const LISTEN_ADDRESS: &str = "127.0.0.1:4321";
 
 
 // LLM config
@@ -14,7 +14,7 @@ pub const SAMPLE_LEN: usize = 1000;
 pub const TOP_K: Option<usize> = None;
 pub const TOP_P: Option<f64> = None;
 
-pub const VERBOSE_PROMPT: bool = false;
+pub const VERBOSE_PROMPT: bool = true;
 pub const SPLIT_PROPMT: bool = true;
 pub const REPEAT_PENALTY: f32 = 1.1;
 pub const REPEAT_LAST_N: usize = 64;

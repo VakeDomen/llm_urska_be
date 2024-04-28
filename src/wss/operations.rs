@@ -2,6 +2,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite::{Error, Message}, WebSocketStream};
 use log::error;
+use anyhow::Result;
 use crate::storage::cache_wss::SOCKETS;
 
 use super::message::WSSMessage;
@@ -35,7 +36,7 @@ pub fn is_authenticated(socket_id: &String) -> bool {
     false
 }
 
-pub async fn get_message(websocket: &mut WebSocketStream<TcpStream>) -> Result<Option<Message>, Error> {
+pub async fn get_message(websocket: &mut WebSocketStream<TcpStream>) -> Result<Option<Message>> {
     let msg = websocket.next().await;
     if let None = msg {
         return Ok(None);
@@ -44,7 +45,7 @@ pub async fn get_message(websocket: &mut WebSocketStream<TcpStream>) -> Result<O
     Ok(Some(msg?))
 }
 
-pub async fn send_message(websocket: &mut WebSocketStream<TcpStream>, msg: WSSMessage) -> Result<(), Error> {
+pub async fn send_message(websocket: &mut WebSocketStream<TcpStream>, msg: WSSMessage) -> Result<()> {
     if let Err(e) = websocket.send(msg.into()).await {
         error!("[WSS operations] Something went wrong sending raw_msg to WS clinet: {:#?}", e);
         return Err(e.into())

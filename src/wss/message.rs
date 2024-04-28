@@ -11,6 +11,8 @@ pub enum WSSMessage {
     Unknown,
 
     // to client
+    Response(String),
+    ResponseToken(String),
     Success,
     Error(String)
 }
@@ -28,7 +30,7 @@ impl From<Message> for WSSMessage {
         // parse game command
         if message_string.starts_with("QUESTION ") {
             let tokens: Vec<&str> = message_string.splitn(2, ' ').collect();
-            if tokens.len() < 3 {
+            if tokens.len() < 2 {
                 println!("[WSS message parser] Invalid QUESTION command format.");
                 return Self::Unknown;
             }

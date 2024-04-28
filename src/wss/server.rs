@@ -62,11 +62,11 @@ pub async fn handle_connection(_: SocketAddr, stream: TcpStream) -> Result<()>  
 
         if raw_msg.is_binary() || raw_msg.is_text() {
             let msg = WSSMessage::from(raw_msg);
-            let reponse = handle(msg, socket_id.clone());
-            if let Err(_) = send_message(&mut websocket,reponse).await {
+            if let Err(e) = handle(msg, socket_id.clone(), &mut websocket).await {
+                error!("[WSS Handler] Error handling socker message: {:#?}", e);
                 remove_socket(&socket_id);
                 break;
-            }
+            };
         } 
     }
     Ok(())

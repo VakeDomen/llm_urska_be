@@ -1,6 +1,7 @@
 use std::io::Write;
 use anyhow::{Error, Result};
 use candle_core::Tensor;
+use log::{debug, info};
 
 use crate::{
     config::{
@@ -96,7 +97,7 @@ pub fn prompt_model(
     if VERBOSE_PROMPT {
         for (token, id) in tokens.get_tokens().iter().zip(tokens.get_ids().iter()) {
             let token = token.replace('▁', " ").replace("<0x0A>", "\n");
-            println!("{id:7} -> '{token}'");
+            debug!("{id:7} -> '{token}'");
         }
     }
     
@@ -178,16 +179,16 @@ pub fn prompt_model(
     if VERBOSE_PROMPT {
         // Optionally print the final output and performance stats if verbose logging is enabled.
         if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
-            print!("{rest}");
+            debug!("{rest}");
         }
         std::io::stdout().flush()?;
     
-        println!(
+        info!(
             "\n\n{:4} prompt tokens processed: {:.2} token/s",
             prompt_tokens.len(),
             prompt_tokens.len() as f64 / prompt_dt.as_secs_f64(),
         );
-        println!(
+        info!(
             "{sampled:4} tokens generated: {:.2} token/s",
             sampled as f64 / dt.as_secs_f64(),
         );
@@ -206,7 +207,7 @@ pub fn prompt_model(
 /// A `Result` indicating success or any error during flushing.
 fn flush_token(token: &str) -> Result<()> {
     if VERBOSE_PROMPT {
-        print!("{token}");
+        debug!("{token}");
         std::io::stdout().flush()?;
     }
     Ok(())

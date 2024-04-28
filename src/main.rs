@@ -1,32 +1,18 @@
-
-use crate::{
-    config::DEFAULT_PROMPT, 
-    llm::prompt::{prompt_model, Prompt}
-};
+use logging::logger::init_logging;
+use wss::server::start_server;
+use anyhow::Result;
 
 mod llm;
 mod config;
+mod wss;
+mod storage;
+mod logging;
 
-
-fn main() {
-    println!(
-        "avx: {}, neon: {}, simd128: {}, f16c: {}",
-        candle_core::utils::with_avx(),
-        candle_core::utils::with_neon(),
-        candle_core::utils::with_simd128(),
-        candle_core::utils::with_f16c()
-    );
-
-    loop {
-        let start = std::time::Instant::now();
-        let prompt = Prompt::One(DEFAULT_PROMPT.to_string());
-
-        match prompt_model(prompt) {
-            Ok(_) => println!("[{:?}]", 
-            start.elapsed().as_secs_f32()),
-            Err(e) => panic!("Can't prompt model: {:#?}", e),
-        }
-    }
+#[tokio::main]
+async fn main() -> Result<()> {
+    init_logging()?;
+    start_server().await;
+    Ok(())
 }
 
 

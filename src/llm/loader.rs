@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use anyhow::{Error, Result};
 use candle_core::{quantized::gguf_file::Content, Device};
 use candle_transformers::models::{quantized_llama::MAX_SEQ_LEN, quantized_llama::ModelWeights};
+use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
@@ -97,9 +98,6 @@ fn load_tokenizer(tokenizer_path: &str) -> Result<Tokenizer> {
 /// # Returns
 /// Returns a Device enum, which could be either Device::Cpu or Device::Cuda.
 ///
-/// # Examples
-/// /// let device = load_device(Some(1)); // Attempt to load CUDA device with ID 1 /// println!("Using device: {:?}", device); ///
-///
 /// # Notes
 /// * The function handles errors internally by logging them and falling back to CPU usage.
 /// * This approach ensures that the application can continue running even if CUDA is not available.
@@ -108,7 +106,7 @@ fn load_device(gpu_id: Option<usize>) -> Device {
         match Device::new_cuda(id) {
             Ok(cuda) => cuda,
             Err(e) => {
-                println!("Error initializing CUDA device. Switching to CPU. Error: {:#?}", e);
+                error!("Error initializing CUDA device. Switching to CPU. Error: {:#?}", e);
                 Device::Cpu
             },
         }
@@ -132,7 +130,7 @@ fn load_model_from_disk(model_path: &str, device: &Device) -> Result<ModelWeight
     
     let model = Content::read(&mut file).map_err(|e| e.with_path(model_path.clone()))?;
     
-    println!(
+    info!(
         "[MODEL] Loaded {:?} ({:?}) tensors in {:.2}s",
         model.tensor_infos.len(),
         model_path,

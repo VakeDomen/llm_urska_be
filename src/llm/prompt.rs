@@ -1,13 +1,27 @@
 use std::io::Write;
 use anyhow::{Error, Result};
 use candle_core::Tensor;
-use candle_transformers::models::quantized_llama::MAX_SEQ_LEN;
 
-use crate::{config::{
-    REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, VERBOSE_PROMPT
-}, llm::{loader::MODEL1, model::setup_logit_procesing}};
-
-use super::{loader::{assign_model, ModelSelector, MODEL2}, tokenizer::TokenOutputStream};
+use crate::{
+    config::{
+        REPEAT_LAST_N, 
+        REPEAT_PENALTY, 
+        SAMPLE_LEN, 
+        SPLIT_PROPMT, 
+        SYSTEM_MSG, 
+        VERBOSE_PROMPT
+    }, 
+    llm::{
+        loader::{
+            MODEL1,
+            MODEL2,
+            assign_model,
+            ModelSelector,
+        },
+        model::setup_logit_procesing,
+        tokenizer::TokenOutputStream
+    },
+};
 
 
 #[derive(Debug)]
@@ -48,10 +62,7 @@ pub fn llama3_prompt(user_msg: String) -> String {
 /// Generates model responses based on a given prompt using a specific tokenizer and model weights.
 ///
 /// # Arguments
-/// * `model` - Model weights used for generating responses.
-/// * `tokenizer` - Tokenizer for encoding the prompt into tokens.
 /// * `prompt` - The prompt provided by the user.
-/// * `device` - The computation device (e.g., CPU, GPU) on which model inference is run.
 ///
 /// # Returns
 /// A `Result` containing the generated response string or an error.
@@ -66,6 +77,7 @@ pub fn prompt_model(
     
     let tokenizer = loaded_model.1.clone();
     let device = loaded_model.2.clone();
+    let max_seq_len = loaded_model.3.clone();
     let model = &mut loaded_model.0;
 
     let mut response_chunks = vec![];
@@ -92,8 +104,8 @@ pub fn prompt_model(
     let prompt_tokens = tokens.get_ids();
     let to_sample = SAMPLE_LEN.saturating_sub(1);
     
-    let prompt_tokens = if prompt_tokens.len() + to_sample > MAX_SEQ_LEN - 10 {
-        let to_remove = prompt_tokens.len() + to_sample + 10 - MAX_SEQ_LEN;
+    let prompt_tokens = if prompt_tokens.len() + to_sample > max_seq_len - 10 {
+        let to_remove = prompt_tokens.len() + to_sample + 10 - max_seq_len;
         prompt_tokens[prompt_tokens.len().saturating_sub(to_remove)..].to_vec()
     } else {
         prompt_tokens.to_vec()

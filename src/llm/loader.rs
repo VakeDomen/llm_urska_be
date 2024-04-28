@@ -1,13 +1,13 @@
 use std::sync::Mutex;
 use anyhow::{Error, Result};
 use candle_core::{quantized::gguf_file::Content, Device};
-use candle_transformers::models::quantized_llama::ModelWeights;
+use candle_transformers::models::{quantized_llama::MAX_SEQ_LEN, quantized_llama::ModelWeights};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
 use crate::config::MODEL_PATH;
 
-pub type LoadedModel = (ModelWeights, Tokenizer, Device);
+pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
 
 #[derive(Debug)]
 pub enum ModelSelector {
@@ -16,14 +16,12 @@ pub enum ModelSelector {
 }
 
 pub static MODEL_TOGGLER: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(0));
-
 pub static MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     match load_model(Some(0)) {
         Ok(m) => Mutex::new(m),
         Err(e) => panic!("Can't lazy load model: {:#?}", e),
     }
 });
-
 pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     match load_model(Some(1)) {
         Ok(m) => Mutex::new(m),
@@ -31,11 +29,10 @@ pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     }
 });
 
-
 pub fn assign_model() -> ModelSelector {
     let mut toggle = MODEL_TOGGLER.lock().unwrap();
     *toggle += 1;
-    *toggle = *toggle % 2;
+    *toggle %= 2;
     if *toggle == 0 {
         ModelSelector::First
     } else {
@@ -71,7 +68,7 @@ fn load_model(gpu_id: Option<usize>) -> Result<LoadedModel> {
         Ok(t) => t,
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };
-    Ok((model, tokenizer, device))
+    Ok((model, tokenizer, device, MAX_SEQ_LEN))
 }
 
 

@@ -22,7 +22,7 @@ fn main() {
         let prompt = Prompt::One(DEFAULT_PROMPT.to_string());
 
         match prompt_model(prompt) {
-            Ok(out) => println!("[{:?}]", 
+            Ok(_) => println!("[{:?}]", 
             start.elapsed().as_secs_f32()),
             Err(e) => panic!("Can't prompt model: {:#?}", e),
         }

@@ -9,6 +9,14 @@ use crate::config::MODEL_PATH;
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device);
 
+#[derive(Debug)]
+pub enum ModelSelector {
+    First,
+    Second,
+}
+
+pub static MODEL_TOGGLER: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(0));
+
 pub static MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     match load_model(Some(0)) {
         Ok(m) => Mutex::new(m),
@@ -22,6 +30,19 @@ pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
         Err(e) => panic!("Can't lazy load model: {:#?}", e),
     }
 });
+
+
+pub fn assign_model() -> ModelSelector {
+    let mut toggle = MODEL_TOGGLER.lock().unwrap();
+    *toggle += 1;
+    *toggle = *toggle % 2;
+    if *toggle == 0 {
+        ModelSelector::First
+    } else {
+        ModelSelector::Second
+    }
+}
+
 
 /// Loads a model into a specified or default computational device.
 ///

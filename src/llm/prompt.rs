@@ -7,7 +7,7 @@ use crate::{config::{
     REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, VERBOSE_PROMPT
 }, llm::{loader::MODEL1, model::setup_logit_procesing}};
 
-use super::tokenizer::TokenOutputStream;
+use super::{loader::{assign_model, ModelSelector, MODEL2}, tokenizer::TokenOutputStream};
 
 
 #[derive(Debug)]
@@ -58,8 +58,12 @@ pub fn llama3_prompt(user_msg: String) -> String {
 pub fn prompt_model(
     prompt: Prompt
 ) -> Result<String> {
-
-    let mut loaded_model = MODEL1.lock().unwrap();
+    let model_selector = assign_model();
+    let mut loaded_model = match model_selector {
+        ModelSelector::First => MODEL1.lock().unwrap(),
+        ModelSelector::Second => MODEL2.lock().unwrap(),
+    };
+    
     let tokenizer = loaded_model.1.clone();
     let device = loaded_model.2.clone();
     let model = &mut loaded_model.0;

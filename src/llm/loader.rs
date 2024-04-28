@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use anyhow::{Error, Result};
 use candle_core::{quantized::gguf_file::Content, Device};
 use candle_transformers::models::{quantized_llama::MAX_SEQ_LEN, quantized_llama::ModelWeights};
@@ -30,8 +30,8 @@ pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     }
 });
 
-pub fn assign_model() -> ModelSelector {
-    let mut toggle = MODEL_TOGGLER.lock().unwrap();
+pub async fn assign_model() -> ModelSelector {
+    let mut toggle = MODEL_TOGGLER.lock().await;
     *toggle += 1;
     *toggle %= 2;
     if *toggle == 0 {

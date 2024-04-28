@@ -2,6 +2,8 @@ use std::io::Write;
 use anyhow::{Error, Result};
 use candle_core::Tensor;
 use log::{debug, info};
+use tokio::net::TcpStream;
+use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     config::{
@@ -14,14 +16,11 @@ use crate::{
     }, 
     llm::{
         loader::{
-            MODEL1,
-            MODEL2,
-            assign_model,
-            ModelSelector,
+            assign_model, ModelSelector, MODEL1, MODEL2
         },
         model::setup_logit_procesing,
         tokenizer::TokenOutputStream
-    },
+    }, wss::{message::WSSMessage, operations::send_message},
 };
 
 
@@ -67,13 +66,14 @@ pub fn llama3_prompt(user_msg: String) -> String {
 ///
 /// # Returns
 /// A `Result` containing the generated response string or an error.
-pub fn prompt_model(
-    prompt: Prompt
+pub async fn prompt_model(
+    prompt: Prompt,
+    mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
-    let model_selector = assign_model();
+    let model_selector = assign_model().await;
     let mut loaded_model = match model_selector {
-        ModelSelector::First => MODEL1.lock().unwrap(),
-        ModelSelector::Second => MODEL2.lock().unwrap(),
+        ModelSelector::First => MODEL1.lock().await,
+        ModelSelector::Second => MODEL2.lock().await,
     };
     
     let tokenizer = loaded_model.1.clone();
@@ -86,7 +86,6 @@ pub fn prompt_model(
    
     // Parse the prompt to a raw string format.
     let prompt_str = parse_prompt_to_raw(&prompt)?;
-    println!("PROPMPT: {:#?}", prompt_str);
     // Tokenize the prompt string for model processing.
     let tokens = tos
         .tokenizer()
@@ -140,7 +139,7 @@ pub fn prompt_model(
     
     // Collect chunks of the generated response.
     if let Some(token) = tos.next_token(next_token)? {
-        let _ = flush_token(&token);
+        let _ = flush_token(&token, &mut websocket).await;
         response_chunks.push(token);
     }
 
@@ -166,7 +165,7 @@ pub fn prompt_model(
         next_token = logits_processor.sample(&logits)?;
         all_tokens.push(next_token);
         if let Some(token) = tos.next_token(next_token)? {
-            let _ = flush_token(&token);
+            let _ = flush_token(&token, &mut websocket).await;
             response_chunks.push(token);
         }
         sampled += 1;
@@ -179,6 +178,7 @@ pub fn prompt_model(
     if VERBOSE_PROMPT {
         // Optionally print the final output and performance stats if verbose logging is enabled.
         if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
+            let _ = flush_token(&rest, &mut websocket).await;
             debug!("{rest}");
         }
         std::io::stdout().flush()?;
@@ -205,7 +205,11 @@ pub fn prompt_model(
 ///
 /// # Returns
 /// A `Result` indicating success or any error during flushing.
-fn flush_token(token: &str) -> Result<()> {
+async fn flush_token(token: &str, websocket: &mut Option<&mut WebSocketStream<TcpStream>>) -> Result<()> {
+    if let Some(ws) = websocket {
+        send_message(*ws, WSSMessage::ResponseToken(token.into())).await?;
+    }
+
     if VERBOSE_PROMPT {
         debug!("{token}");
         std::io::stdout().flush()?;

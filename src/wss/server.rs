@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{config::LISTEN_ADDRESS, storage::cache_wss::SOCKETS};
 
-use super::{handler::handle, message::WSSMessage, operations::{get_message, remove_socket, send_message}};
+use super::{handler::handle, message::WSSMessage, operations::{get_message, remove_socket}};
 
 pub async fn start_server() {
     println!("HELLO");

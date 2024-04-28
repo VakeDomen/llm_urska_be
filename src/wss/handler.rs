@@ -1,4 +1,4 @@
-use crate::{llm::prompt::{prompt_model, Prompt}, storage::cache_wss::{dec_que, inc_que}};
+use crate::{llm::prompt::{prompt_model, Prompt}, storage::cache_wss::{dec_que, inc_que, que_len, que_pos}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -11,12 +11,30 @@ pub async fn handle(
     websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     match msg {
-        WSSMessage::Prompt(question) => handle_question(question, socket_id, websocket).await,
+        WSSMessage::Prompt(question) => handle_prompt(question, socket_id, websocket).await,
+        WSSMessage::QueueLen => handle_que_len(websocket).await,
+        WSSMessage::QueuePos => handle_que_pos(socket_id, websocket).await,
         _ => Ok(())
     }
 }
 
-async fn handle_question(
+async fn handle_que_len(
+    mut websocket: &mut WebSocketStream<TcpStream>
+) -> Result<()> {
+    let len = que_len().await;
+    send_message(&mut websocket, WSSMessage::QueLenResponse(len)).await
+}
+
+
+async fn handle_que_pos(
+    socket_id: String,
+    mut websocket: &mut WebSocketStream<TcpStream>
+) -> Result<()> {
+    let pos = que_pos(socket_id).await;
+    send_message(&mut websocket, WSSMessage::QuePosResponse(pos)).await
+}
+
+async fn handle_prompt(
     question: String,
     socket_id: String, 
     mut websocket: &mut WebSocketStream<TcpStream>

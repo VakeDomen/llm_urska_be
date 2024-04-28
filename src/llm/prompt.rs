@@ -75,7 +75,7 @@ pub async fn prompt_model(
     prompt: Prompt,
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
-    
+
     let _ = flush_token("Assigning model...", &mut websocket, FlushType::Status).await?;
 
     let model_selector = assign_model().await;
@@ -205,7 +205,8 @@ pub async fn prompt_model(
         );
     }
 
-
+    let _ = flush_token("Done!", &mut websocket, FlushType::Status).await?;
+    
     Ok(response_chunks.join(""))
 }
 

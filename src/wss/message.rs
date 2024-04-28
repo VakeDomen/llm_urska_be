@@ -8,12 +8,16 @@ use tokio_tungstenite::tungstenite::Message;
 pub enum WSSMessage {
     // from client
     Prompt(String),
+    QueueLen,
+    QueuePos,
     Unknown,
 
     // to client
     PromptStatus(String),
     PromptResponse(String),
     PromptResponseToken(String),
+    QueLenResponse(usize),
+    QuePosResponse(usize),
     Success,
     Error(String)
 }
@@ -29,7 +33,7 @@ impl From<Message> for WSSMessage {
         };
 
         // parse game command
-        if message_string.starts_with("QUESTION ") {
+        if message_string.starts_with("Prompt ") {
             let tokens: Vec<&str> = message_string.splitn(2, ' ').collect();
             if tokens.len() < 2 {
                 println!("[WSS message parser] Invalid QUESTION command format.");
@@ -39,6 +43,14 @@ impl From<Message> for WSSMessage {
             let question_string = tokens[1].to_string();
             return Self::Prompt(question_string);
         } 
+
+        if message_string.eq("QueueLen") {
+            return Self::QueueLen;
+        }
+
+        if message_string.eq("QueuePos") {
+            return Self::QueuePos;
+        }
 
         Self::Unknown
     }

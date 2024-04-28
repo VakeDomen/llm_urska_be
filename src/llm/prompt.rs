@@ -1,12 +1,11 @@
 use std::io::Write;
 use anyhow::{Error, Result};
-use candle_core::{Device, Tensor};
-use candle_transformers::models::quantized_llama::{ModelWeights, MAX_SEQ_LEN};
-use tokenizers::Tokenizer;
+use candle_core::Tensor;
+use candle_transformers::models::quantized_llama::MAX_SEQ_LEN;
 
 use crate::{config::{
     REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, VERBOSE_PROMPT
-}, llm::model::setup_logit_procesing};
+}, llm::{loader::MODEL1, model::setup_logit_procesing}};
 
 use super::tokenizer::TokenOutputStream;
 
@@ -57,18 +56,19 @@ pub fn llama3_prompt(user_msg: String) -> String {
 /// # Returns
 /// A `Result` containing the generated response string or an error.
 pub fn prompt_model(
-    mut model: ModelWeights, 
-    tokenizer: Tokenizer, 
-    prompt: Prompt, 
-    device: &Device
+    prompt: Prompt
 ) -> Result<String> {
+
+    let mut loaded_model = MODEL1.lock().unwrap();
+    let tokenizer = loaded_model.1.clone();
+    let device = loaded_model.2.clone();
+    let model = &mut loaded_model.0;
+
     let mut response_chunks = vec![];
     let mut tos = TokenOutputStream::new(tokenizer);
    
     // Parse the prompt to a raw string format.
     let prompt_str = parse_prompt_to_raw(&prompt)?;
-    print!("{}", &prompt_str);
-    
     
     // Tokenize the prompt string for model processing.
     let tokens = tos
@@ -102,7 +102,7 @@ pub fn prompt_model(
     let start_prompt_processing: std::time::Instant = std::time::Instant::now();
     let mut next_token = if !SPLIT_PROPMT {
         // Generate response in a single batch if not splitting.
-        let input = Tensor::new(prompt_tokens.as_slice(), device)?.unsqueeze(0)?;
+        let input = Tensor::new(prompt_tokens.as_slice(), &device)?.unsqueeze(0)?;
         let logits = model.forward(&input, 0)?;
         let logits = logits.squeeze(0)?;
         logits_processor.sample(&logits)?
@@ -110,7 +110,7 @@ pub fn prompt_model(
         // Generate response token by token if splitting.
         let mut next_token = 0;
         for (pos, token) in prompt_tokens.iter().enumerate() {
-            let input = Tensor::new(&[*token], device)?.unsqueeze(0)?;
+            let input = Tensor::new(&[*token], &device)?.unsqueeze(0)?;
             let logits = model.forward(&input, pos)?;
             let logits = logits.squeeze(0)?;
             next_token = logits_processor.sample(&logits)?
@@ -133,7 +133,7 @@ pub fn prompt_model(
     let start_post_prompt = std::time::Instant::now();
     let mut sampled = 0;
     for index in 0..to_sample {
-        let input = Tensor::new(&[next_token], device)?.unsqueeze(0)?;
+        let input = Tensor::new(&[next_token], &device)?.unsqueeze(0)?;
         let logits = model.forward(&input, prompt_tokens.len() + index)?;
         let logits = logits.squeeze(0)?;
         let logits = if REPEAT_PENALTY == 1. {

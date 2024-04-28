@@ -1,18 +1,4 @@
-use tokenizers::Tokenizer;
 use anyhow::{Error, Result};
-
-
-/// Loads a `Tokenizer` from a specified file path.
-/// 
-/// # Arguments
-/// * `tokenizer_path` - A string slice that holds the file path to the tokenizer model.
-///
-/// # Returns
-/// A `Result` which, on success, contains the `Tokenizer`, and on failure, contains an `Error`.
-pub fn load_tokenizer(tokenizer_path: &str) -> Result<Tokenizer> {
-    let tokenizer_path = std::path::PathBuf::from(tokenizer_path);
-    Tokenizer::from_file(tokenizer_path).map_err(Error::msg)
-}
 
 /// This is a wrapper around a tokenizer to ensure that tokens can be returned to the user in a
 /// streaming way rather than having to wait for the full decoding.
@@ -99,40 +85,11 @@ impl TokenOutputStream {
         }
     }
 
-    /// Decodes all tokens stored in the stream to a single string.
-    ///
-    /// # Returns
-    /// A `Result` containing the fully decoded string.
-    pub fn decode_all(&self) -> Result<String> {
-        self.decode(&self.tokens)
-    }
-
-    /// Retrieves the token ID for a given string, if it exists in the tokenizer's vocabulary.
-    ///
-    /// # Arguments
-    /// * `token_s` - The string representation of the token to look up.
-    ///
-    /// # Returns
-    /// An `Option<u32>` which contains the token ID if found, or `None` if not found.
-    pub fn get_token(&self, token_s: &str) -> Option<u32> {
-        self.tokenizer.get_vocab(true).get(token_s).copied()
-    }
-
     /// Provides a reference to the internal `Tokenizer` used by the stream.
     ///
     /// # Returns
     /// A reference to the `tokenizers::Tokenizer`.
     pub fn tokenizer(&self) -> &tokenizers::Tokenizer {
         &self.tokenizer
-    }
-
-    /// Provides a reference to the internal `Tokenizer` used by the stream.
-    ///
-    /// # Returns
-    /// A reference to the `tokenizers::Tokenizer`.
-    pub fn clear(&mut self) {
-        self.tokens.clear();
-        self.prev_index = 0;
-        self.current_index = 0;
     }
 }

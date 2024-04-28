@@ -35,7 +35,7 @@ pub async fn handle_connection(_: SocketAddr, stream: TcpStream) -> Result<()>  
     let socket_id = Uuid::new_v4().to_string();
     // Add the connection to the list
     {
-        let mut conns = SOCKETS.lock().unwrap();
+        let mut conns = SOCKETS.lock().await;
         conns.insert(socket_id.clone(), None);
     }
     
@@ -43,7 +43,7 @@ pub async fn handle_connection(_: SocketAddr, stream: TcpStream) -> Result<()>  
         let raw_msg: Option<Message> = match get_message(&mut websocket).await {
             Ok(m) => m,
             Err(_) => {
-                remove_socket(&socket_id);
+                remove_socket(&socket_id).await;
                 break;
             }
         };
@@ -56,7 +56,7 @@ pub async fn handle_connection(_: SocketAddr, stream: TcpStream) -> Result<()>  
 
         if raw_msg.is_close() {
             info!("[WSS] Closing socket!");
-            remove_socket(&socket_id);
+            remove_socket(&socket_id).await;
             break;
         }
 
@@ -64,7 +64,7 @@ pub async fn handle_connection(_: SocketAddr, stream: TcpStream) -> Result<()>  
             let msg = WSSMessage::from(raw_msg);
             if let Err(e) = handle(msg, socket_id.clone(), &mut websocket).await {
                 error!("[WSS Handler] Error handling socker message: {:#?}", e);
-                remove_socket(&socket_id);
+                remove_socket(&socket_id).await;
                 break;
             };
         } 

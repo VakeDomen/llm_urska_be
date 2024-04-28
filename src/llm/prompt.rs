@@ -29,6 +29,11 @@ pub enum Prompt {
     One(String),
 }
 
+pub enum FlushType {
+    Token,
+    Status,
+}
+
 /// Parses a `Prompt` enum into a raw string format suitable for further processing.
 /// 
 /// # Arguments
@@ -70,6 +75,9 @@ pub async fn prompt_model(
     prompt: Prompt,
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
+    
+    let _ = flush_token("Assigning model...", &mut websocket, FlushType::Status).await?;
+
     let model_selector = assign_model().await;
     let mut loaded_model = match model_selector {
         ModelSelector::First => MODEL1.lock().await,
@@ -84,6 +92,7 @@ pub async fn prompt_model(
     let mut response_chunks = vec![];
     let mut tos = TokenOutputStream::new(tokenizer);
    
+    let _ = flush_token("Tokenizing prompt...", &mut websocket, FlushType::Status).await?;
     // Parse the prompt to a raw string format.
     let prompt_str = parse_prompt_to_raw(&prompt)?;
     // Tokenize the prompt string for model processing.
@@ -101,6 +110,7 @@ pub async fn prompt_model(
     }
     
     // Handle token length restrictions by trimming if necessary.
+    let _ = flush_token("Clipping prompt...", &mut websocket, FlushType::Status).await?;
     let prompt_tokens = tokens.get_ids();
     let to_sample = SAMPLE_LEN.saturating_sub(1);
     
@@ -112,6 +122,7 @@ pub async fn prompt_model(
     };
     
     // Setup for generating model responses.
+    let _ = flush_token("Generating tokens...", &mut websocket, FlushType::Status).await?;
     let mut all_tokens = vec![];
     let mut logits_processor = setup_logit_procesing();
 
@@ -139,7 +150,7 @@ pub async fn prompt_model(
     
     // Collect chunks of the generated response.
     if let Some(token) = tos.next_token(next_token)? {
-        let _ = flush_token(&token, &mut websocket).await;
+        let _ = flush_token(&token, &mut websocket, FlushType::Token).await;
         response_chunks.push(token);
     }
 
@@ -165,7 +176,7 @@ pub async fn prompt_model(
         next_token = logits_processor.sample(&logits)?;
         all_tokens.push(next_token);
         if let Some(token) = tos.next_token(next_token)? {
-            let _ = flush_token(&token, &mut websocket).await;
+            let _ = flush_token(&token, &mut websocket, FlushType::Token).await;
             response_chunks.push(token);
         }
         sampled += 1;
@@ -178,7 +189,7 @@ pub async fn prompt_model(
     if VERBOSE_PROMPT {
         // Optionally print the final output and performance stats if verbose logging is enabled.
         if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
-            let _ = flush_token(&rest, &mut websocket).await;
+            let _ = flush_token(&rest, &mut websocket, FlushType::Token).await;
             debug!("{rest}");
         }
         std::io::stdout().flush()?;
@@ -205,13 +216,21 @@ pub async fn prompt_model(
 ///
 /// # Returns
 /// A `Result` indicating success or any error during flushing.
-async fn flush_token(token: &str, websocket: &mut Option<&mut WebSocketStream<TcpStream>>) -> Result<()> {
+async fn flush_token(
+    content: &str, 
+    websocket: &mut Option<&mut WebSocketStream<TcpStream>>,
+    flush_type: FlushType,
+) -> Result<()> {
     if let Some(ws) = websocket {
-        send_message(*ws, WSSMessage::ResponseToken(token.into())).await?;
+        match flush_type {
+            FlushType::Token => send_message(*ws, WSSMessage::PromptResponseToken(content.into())).await?,
+            FlushType::Status => send_message(*ws, WSSMessage::PromptStatus(content.into())).await?,
+        }
+        
     }
 
     if VERBOSE_PROMPT {
-        debug!("{token}");
+        debug!("{content}");
         std::io::stdout().flush()?;
     }
     Ok(())

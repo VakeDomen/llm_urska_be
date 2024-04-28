@@ -7,12 +7,13 @@ use tokio_tungstenite::tungstenite::Message;
 #[derive(Debug, Serialize)]
 pub enum WSSMessage {
     // from client
-    Question(String),
+    Prompt(String),
     Unknown,
 
     // to client
-    Response(String),
-    ResponseToken(String),
+    PromptStatus(String),
+    PromptResponse(String),
+    PromptResponseToken(String),
     Success,
     Error(String)
 }
@@ -36,7 +37,7 @@ impl From<Message> for WSSMessage {
             }
 
             let question_string = tokens[1].to_string();
-            return Self::Question(question_string);
+            return Self::Prompt(question_string);
         } 
 
         Self::Unknown

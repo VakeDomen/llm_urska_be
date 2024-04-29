@@ -1,19 +1,32 @@
+use std::path::Path;
+
 use tokio::sync::Mutex;
 use anyhow::{Error, Result};
 use candle_core::{quantized::gguf_file::Content, Device};
-use candle_transformers::models::{quantized_llama::MAX_SEQ_LEN, quantized_llama::ModelWeights};
+use candle_nn::VarBuilder;
+use candle_transformers::models::{
+    bert::{BertModel, Config, DTYPE}, 
+    quantized_llama::{ModelWeights, MAX_SEQ_LEN}
+};
 use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
-use crate::config::MODEL_PATH;
+use crate::config::{EMBEDDING_MODEL_PATH, MODEL_PATH};
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
+pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
+
 
 #[derive(Debug)]
 pub enum ModelSelector {
     First,
     Second,
+}
+
+pub enum ModelLoadFormat {
+    Gguf,
+    PythorchBin,
 }
 
 pub static MODEL_TOGGLER: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(0));
@@ -42,6 +55,19 @@ pub async fn assign_model() -> ModelSelector {
 }
 
 
+pub fn load_bert_model(gpu_id: Option<usize>) -> Result<LoadedEmbeddingModel> {
+    let device = load_device(gpu_id);
+    let model = match load_pybin_bert_model_from_disk(EMBEDDING_MODEL_PATH, &device) { 
+        Ok(m) => m,
+        Err(e) => panic!("Can't load embedding model: {:#?}", e),
+    };
+    let tokenizer = match load_tokenizer(&format!("{}/tokenizer.json", EMBEDDING_MODEL_PATH)) {
+        Ok(t) => t,
+        Err(e) => panic!("Can't load tokenizer: {:#?}", e),
+    };
+    Ok((model, tokenizer, device))
+}
+
 /// Loads a model into a specified or default computational device.
 ///
 /// This function attempts to load a machine learning model from a predefined path on disk
@@ -61,7 +87,7 @@ pub async fn assign_model() -> ModelSelector {
 /// Panics if the model cannot be loaded from the specified path.
 fn load_model(gpu_id: Option<usize>) -> Result<LoadedModel> {
     let device = load_device(gpu_id);
-    let model = match load_model_from_disk(MODEL_PATH, &device) { 
+    let model = match load_gguf_model_from_disk(MODEL_PATH, &device) { 
         Ok(m) => m,
         Err(e) => panic!("Can't load model: {:#?}", e),
     };
@@ -123,7 +149,43 @@ fn load_device(gpu_id: Option<usize>) -> Device {
 ///
 /// # Returns
 /// A `Result` containing the loaded model weights or an error if the operation fails.
-fn load_model_from_disk(model_path: &str, device: &Device) -> Result<ModelWeights> {
+fn load_pybin_bert_model_from_disk(model_path: &str, device: &Device) -> Result<BertModel> {
+    let config = match std::fs::read_to_string(&format!("{}/config.json", model_path)) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Failed loading embedding model config from file: {:#?}", e);
+            return Err(e.into());
+        },
+    };
+    let config: Config = match serde_json::from_str(&config){
+        Ok(c) => c,
+        Err(e) => {
+            error!("Failed parsing embedding model config from JSON string: {:#?}", e);
+            return Err(e.into());
+        },
+    };
+    let model_path_string = format!("{}/pytorch_model.bin", model_path);
+    let model_path = Path::new(&model_path_string);
+    let vb = match VarBuilder::from_pth(model_path, DTYPE, &device){
+        Ok(c) => c,
+        Err(e) => {
+            error!("Failed parsing VarBuilder from PytorchBin model path: {:#?}", e);
+            return Err(e.into());
+        },
+    };;
+    Ok(BertModel::load(vb, &config)?)
+}
+
+
+/// Loads model weights from a file path on a specified device.
+///
+/// # Arguments
+/// * `model_path` - A string slice that specifies the path to the model file.
+/// * `device` - A reference to the device (CPU, GPU) where the model will be loaded.
+///
+/// # Returns
+/// A `Result` containing the loaded model weights or an error if the operation fails.
+fn load_gguf_model_from_disk(model_path: &str, device: &Device) -> Result<ModelWeights> {
     let model_path = std::path::PathBuf::from(model_path);
     let mut file = std::fs::File::open(&model_path)?;
     let start = std::time::Instant::now();
@@ -138,5 +200,6 @@ fn load_model_from_disk(model_path: &str, device: &Device) -> Result<ModelWeight
     );
     
     let weights = ModelWeights::from_gguf(model, &mut file, device)?;
+        
     Ok(weights)
 }

@@ -7,6 +7,7 @@ pub const DEFAULT_PROMPT: &str = "O say can you see, by the dawn's early light,\
 pub const SYSTEM_MSG: &str = "Respond in JSON. Your task is to help us analyize bitcoin inscriptions. You will tell me a summary of the given text. And then give a list of up to 5 keywords that would describe the inscription.";
 
 pub const MODEL_PATH: &str = "models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf";
+pub const EMBEDDING_MODEL_PATH: &str = "models/bge-large-en-v1.5-ft";
 pub const SEED: u64 = 42;
 
 pub const TEMPERATURE: f64 = 0.4;

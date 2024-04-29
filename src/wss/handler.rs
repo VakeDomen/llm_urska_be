@@ -1,6 +1,6 @@
 use std::{thread, time::Duration};
 
-use crate::{llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::cache_wss::{dec_que, inc_que, que_len, que_pos}};
+use crate::{llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, qdrant::vector_search}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -52,7 +52,9 @@ async fn handle_prompt(
     }
 
     let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
-    
+    let result = vector_search(emb).await?;
+    println!("RES: {:#?}", result);
+
     let _ = match prompt_model(Prompt::One(question), Some(websocket)).await {
         Ok(response) => send_message(&mut websocket, WSSMessage::PromptResponse(response)).await,
         Err(e) => send_message(&mut websocket, WSSMessage::Error(e.to_string())).await,

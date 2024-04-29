@@ -1,4 +1,4 @@
-use crate::{llm::prompt::{prompt_model, Prompt}, storage::cache_wss::{dec_que, inc_que, que_len, que_pos}};
+use crate::{llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::cache_wss::{dec_que, inc_que, que_len, que_pos}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -41,6 +41,9 @@ async fn handle_prompt(
 ) -> Result<()> {
     inc_que(socket_id.clone()).await;
     send_message(websocket, WSSMessage::Success).await?;
+
+    let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
+
     let _ = match prompt_model(Prompt::One(question), Some(websocket)).await {
         Ok(response) => send_message(&mut websocket, WSSMessage::PromptResponse(response)).await,
         Err(e) => send_message(&mut websocket, WSSMessage::Error(e.to_string())).await,

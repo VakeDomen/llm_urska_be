@@ -13,7 +13,7 @@ pub async fn inc_que(socket_id: String) {
 
 
 pub async fn dec_que(socket_id: String) {
-    let pos = que_pos(socket_id).await;
+    let pos = que_pos(&socket_id).await;
     let mut que = QUEUE.lock().await;
     que.remove(pos);
 }
@@ -23,7 +23,7 @@ pub async fn que_len() -> usize {
     que.len()
 }
 
-pub async fn que_pos(socket_id: String) -> usize {
+pub async fn que_pos(socket_id: &String) -> usize {
     let que = QUEUE.lock().await;
-    que.iter().position(|x| *x == socket_id).unwrap()
+    que.iter().position(|x| *x == *socket_id).unwrap()
 }

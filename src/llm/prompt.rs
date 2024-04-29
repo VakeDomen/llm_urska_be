@@ -70,7 +70,7 @@ pub async fn prompt_model(
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
 
-    let _ = flush_message("Assigning model...", &mut websocket, FlushType::Status).await?;
+    let _ = flush_message("Assigning LLM model...", &mut websocket, FlushType::Status).await?;
 
     let model_selector = assign_model().await;
     let mut loaded_model = match model_selector {

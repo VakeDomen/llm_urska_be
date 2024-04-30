@@ -38,7 +38,7 @@ pub async fn is_authenticated(socket_id: &String) -> bool {
 
 pub async fn get_message(websocket: &mut WebSocketStream<TcpStream>) -> Result<Option<Message>> {
     let msg = websocket.next().await;
-    if let None = msg {
+    if msg.is_none() {
         return Ok(None);
     }
     let msg = msg.unwrap();

@@ -57,9 +57,9 @@ impl From<Message> for WSSMessage {
     }
 }
 
-impl Into<Message> for WSSMessage {
-    fn into(self) -> Message {
-        match serde_any::to_string(&self, Format::Json)  {
+impl From<WSSMessage> for Message {
+    fn from(val: WSSMessage) -> Self {
+        match serde_any::to_string(&val, Format::Json)  {
             Ok(s) => Message::Text(s),
             Err(e) => Message::Text(format!("Couldn't serialize message: {:#?}", e)),
         }

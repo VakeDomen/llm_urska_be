@@ -90,7 +90,7 @@ pub async fn prompt_model(
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
 
-    let _ = flush_message("Assigning LLM model...", &mut websocket, FlushType::Status).await?;
+    flush_message("Assigning LLM model...", &mut websocket, FlushType::Status).await?;
 
     let model_selector = assign_model().await;
     let mut loaded_model = match model_selector {
@@ -100,13 +100,13 @@ pub async fn prompt_model(
     
     let tokenizer = loaded_model.1.clone();
     let device = loaded_model.2.clone();
-    let max_seq_len = loaded_model.3.clone();
+    let max_seq_len = loaded_model.3;
     let model = &mut loaded_model.0;
 
     let mut response_chunks = vec![];
     let mut tos = TokenOutputStream::new(tokenizer);
    
-    let _ = flush_message("Tokenizing prompt...", &mut websocket, FlushType::Status).await?;
+    flush_message("Tokenizing prompt...", &mut websocket, FlushType::Status).await?;
     // Parse the prompt to a raw string format.
     let prompt_str = parse_prompt_to_raw(prompt)?;
     // Tokenize the prompt string for model processing.
@@ -124,7 +124,7 @@ pub async fn prompt_model(
     }
     
     // Handle token length restrictions by trimming if necessary.
-    let _ = flush_message("Clipping prompt...", &mut websocket, FlushType::Status).await?;
+    flush_message("Clipping prompt...", &mut websocket, FlushType::Status).await?;
     let prompt_tokens = tokens.get_ids();
     let to_sample = SAMPLE_LEN.saturating_sub(1);
     
@@ -136,7 +136,7 @@ pub async fn prompt_model(
     };
     
     // Setup for generating model responses.
-    let _ = flush_message("Generating tokens...", &mut websocket, FlushType::Status).await?;
+    flush_message("Generating tokens...", &mut websocket, FlushType::Status).await?;
     let mut all_tokens = vec![];
     let mut logits_processor = setup_logit_procesing();
 
@@ -219,7 +219,7 @@ pub async fn prompt_model(
         );
     }
 
-    let _ = flush_message("Done!", &mut websocket, FlushType::Status).await?;
+    flush_message("Done!", &mut websocket, FlushType::Status).await?;
     
     Ok(response_chunks.join(""))
 }

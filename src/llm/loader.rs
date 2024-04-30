@@ -145,7 +145,7 @@ fn load_device(gpu_id: Option<usize>) -> Device {
 /// # Returns
 /// A `Result` containing the loaded model weights or an error if the operation fails.
 fn load_pybin_bert_model_from_disk(model_path: &str, device: &Device) -> Result<BertModel> {
-    let config = match std::fs::read_to_string(&format!("{}/config.json", model_path)) {
+    let config = match std::fs::read_to_string(format!("{}/config.json", model_path)) {
         Ok(c) => c,
         Err(e) => {
             error!("Failed loading embedding model config from file: {:#?}", e);
@@ -161,7 +161,7 @@ fn load_pybin_bert_model_from_disk(model_path: &str, device: &Device) -> Result<
     };
     let model_path_string = format!("{}/pytorch_model.bin", model_path);
     let model_path = Path::new(&model_path_string);
-    let vb = match VarBuilder::from_pth(model_path, DTYPE, &device){
+    let vb = match VarBuilder::from_pth(model_path, DTYPE, device){
         Ok(c) => c,
         Err(e) => {
             error!("Failed parsing VarBuilder from PytorchBin model path: {:#?}", e);

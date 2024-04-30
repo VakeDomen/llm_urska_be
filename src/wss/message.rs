@@ -37,7 +37,7 @@ impl From<Message> for WSSMessage {
         if message_string.starts_with("Prompt ") {
             let tokens: Vec<&str> = message_string.splitn(2, ' ').collect();
             if tokens.len() < 2 {
-                println!("[WSS message parser] Invalid QUESTION command format.");
+                error!("[WSS message parser] Invalid QUESTION command format.");
                 return Self::Unknown;
             }
 

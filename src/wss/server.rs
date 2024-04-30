@@ -9,8 +9,6 @@ use crate::{config::LISTEN_ADDRESS, storage::cache_wss::SOCKETS};
 use super::{handler::handle, message::WSSMessage, operations::{get_message, remove_socket}};
 
 pub async fn start_server() {
-    println!("HELLO");
-    info!("HELLO");
     let listener = TcpListener::bind(LISTEN_ADDRESS).await.expect("[WSS] Can't listen");
     info!("[WSS] Web socket server started: {}", LISTEN_ADDRESS);
     while let Ok((stream, _)) = listener.accept().await {

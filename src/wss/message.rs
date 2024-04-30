@@ -15,6 +15,7 @@ pub enum WSSMessage {
     // to client
     PromptStatus(String),
     PromptResponse(String),
+    PromptPassage(String),
     PromptResponseToken(String),
     QueLenResponse(usize),
     QuePosResponse(usize),

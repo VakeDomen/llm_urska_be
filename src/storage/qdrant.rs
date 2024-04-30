@@ -16,13 +16,7 @@ static QDRANT_CLIENT: Lazy<Mutex<QdrantClient>> = Lazy::new(|| {
 pub async fn vector_search(embedding: Tensor) -> Result<SearchResponse> {
     // Convert the tensor to a vector of f32 values.
     let embedding_vec = embedding.to_vec2::<f32>()?.first().unwrap().clone();
-
-    // Acquire the lock and store the guard in a variable.
-    // Make sure to bind the lock guard to a variable.
     let guard = QDRANT_CLIENT.lock().await;
-
-    // // Use the lock_guard (guard in this case) to perform the search.
-    // // Pass the client reference correctly to the search function.
     let search_result = guard
         .search_points(&SearchPoints {
             collection_name: QDRANT_COLLECTION.to_string(),

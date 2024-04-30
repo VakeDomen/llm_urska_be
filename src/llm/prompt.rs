@@ -7,12 +7,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     config::{
-        REPEAT_LAST_N, 
-        REPEAT_PENALTY, 
-        SAMPLE_LEN, 
-        SPLIT_PROPMT, 
-        SYSTEM_MSG, 
-        VERBOSE_PROMPT
+        REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
     }, llm::{
         loader::{
             assign_model, ModelSelector, MODEL1, MODEL2
@@ -25,7 +20,8 @@ use crate::{
 
 #[derive(Debug)]
 pub enum Prompt {
-    One(String),
+    PlainQuestion(String),
+    RagPrompt(String, Vec<String>)
 }
 
 /// Parses a `Prompt` enum into a raw string format suitable for further processing.
@@ -35,9 +31,10 @@ pub enum Prompt {
 ///
 /// # Returns
 /// A `Result` containing the processed string or an error.
-pub fn parse_prompt_to_raw(prompt: &Prompt) -> Result<String> {
-    match &prompt {
-        Prompt::One(prompt) => Ok(llama3_prompt(prompt.clone())),
+pub fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
+    match prompt {
+        Prompt::PlainQuestion(prompt) => Ok(llama3_prompt(prompt)),
+        Prompt::RagPrompt(prompt, passages) => Ok(llama3_rag_prompt(prompt, passages)),
     }
 }
 
@@ -53,6 +50,29 @@ pub fn llama3_prompt(user_msg: String) -> String {
     format!(
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
         SYSTEM_MSG,
+        user_msg
+    )
+}
+
+/// Formats a user message into a string structured for model processing.
+/// 
+/// # Arguments
+/// * `user_msg` - The user message to format.
+///
+/// # Returns
+/// A formatted string with predefined system and user sections.
+pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
+    let passage_string = passages
+        .join("\n# Passage: ");
+
+    let user_msg = format!(
+        "# Passage:\n{}\n# Student question: \n{}",
+        passage_string,
+        user_msg
+    );
+    format!(
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
+        SYSTEM_RAG_MSG,
         user_msg
     )
 }
@@ -88,7 +108,7 @@ pub async fn prompt_model(
    
     let _ = flush_message("Tokenizing prompt...", &mut websocket, FlushType::Status).await?;
     // Parse the prompt to a raw string format.
-    let prompt_str = parse_prompt_to_raw(&prompt)?;
+    let prompt_str = parse_prompt_to_raw(prompt)?;
     // Tokenize the prompt string for model processing.
     let tokens = tos
         .tokenizer()
@@ -184,7 +204,7 @@ pub async fn prompt_model(
         // Optionally print the final output and performance stats if verbose logging is enabled.
         if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
             let _ = flush_message(&rest, &mut websocket, FlushType::Token).await;
-            debug!("{rest}");
+            response_chunks.push(rest);
         }
         std::io::stdout().flush()?;
     

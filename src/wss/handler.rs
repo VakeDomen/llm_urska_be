@@ -4,6 +4,7 @@ use crate::{llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, P
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
+use qdrant_client::qdrant::SearchResponse;
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
 
@@ -52,13 +53,32 @@ async fn handle_prompt(
     }
 
     let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
-    let result = vector_search(emb).await?;
-    println!("RES: {:#?}", result);
+    let passages = extract_node_content(vector_search(emb).await?);
+    let number_of_results = passages.len();
+    for passage in &passages {
+        let _ = send_message(websocket, WSSMessage::PromptPassage(passage.clone())).await;
+    }
+    let prompt = match number_of_results {
+        0 => Prompt::PlainQuestion(question),
+        _ => Prompt::RagPrompt(question, passages),
+    };
 
-    let _ = match prompt_model(Prompt::One(question), Some(websocket)).await {
+    let _ = match prompt_model(prompt, Some(websocket)).await {
         Ok(response) => send_message(&mut websocket, WSSMessage::PromptResponse(response)).await,
         Err(e) => send_message(&mut websocket, WSSMessage::Error(e.to_string())).await,
     };
     dec_que(socket_id).await;
     Ok(())
+}
+
+fn extract_node_content(response: SearchResponse) -> Vec<String> {
+    let mut node_contents = Vec::new();
+    for point in &response.result {
+        if let Some(content) = point.payload.get("_node_content") {
+            if let Some(text) = content.as_str() {
+                node_contents.push(text.to_string());
+            }
+        }
+    }
+    node_contents
 }

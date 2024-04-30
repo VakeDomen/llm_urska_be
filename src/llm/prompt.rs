@@ -17,20 +17,26 @@ use crate::{
     }, logging::flush::{flush_message, FlushType}
 };
 
-
+/// Represents different types of prompts that can be processed by the system.
+///
+/// This enum categorizes prompts into plain questions and questions with associated passages for Retrieval-Augmented Generation (RAG).
 #[derive(Debug)]
 pub enum Prompt {
+    /// Represents a plain question without associated contextual information.
     PlainQuestion(String),
+    /// Represents a question accompanied by a set of relevant passages, used for RAG.
     RagPrompt(String, Vec<String>)
 }
 
-/// Parses a `Prompt` enum into a raw string format suitable for further processing.
-/// 
-/// # Arguments
-/// * `prompt` - A reference to the `Prompt` enum.
+/// Parses a `Prompt` into a formatted string that can be used as input to an LLM.
+///
+/// Depending on the type of `Prompt`, this function formats it differently to align with the requirements of the LLM processing.
+///
+/// # Parameters
+/// - `prompt`: The `Prompt` enum containing either a plain question or a RAG type question with passages.
 ///
 /// # Returns
-/// A `Result` containing the processed string or an error.
+/// Returns a `Result` with a formatted string suitable for LLM input if successful, or an error if the formatting fails.
 pub fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
     match prompt {
         Prompt::PlainQuestion(prompt) => Ok(llama3_prompt(prompt)),
@@ -39,13 +45,6 @@ pub fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
 }
 
 
-/// Formats a user message into a string structured for model processing.
-/// 
-/// # Arguments
-/// * `user_msg` - The user message to format.
-///
-/// # Returns
-/// A formatted string with predefined system and user sections.
 pub fn llama3_prompt(user_msg: String) -> String {
     format!(
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
@@ -54,13 +53,6 @@ pub fn llama3_prompt(user_msg: String) -> String {
     )
 }
 
-/// Formats a user message into a string structured for model processing.
-/// 
-/// # Arguments
-/// * `user_msg` - The user message to format.
-///
-/// # Returns
-/// A formatted string with predefined system and user sections.
 pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
     let passage_string = passages
         .join("\n# Passage: ");

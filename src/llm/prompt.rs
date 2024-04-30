@@ -46,8 +46,8 @@ pub fn parse_prompt_to_raw(prompt: Prompt) -> String {
 
 pub fn plain_question_prompt(prompt: String ) -> String {
     match MODEL_ARCITECTURE {
-        super::model::ModelArchitecture::Llama3 => llama3_prompt(prompt),
-        super::model::ModelArchitecture::Mixtral => mixtral_prompt(prompt),
+        super::model::ModelArchitecture::Llama3 => llama3_prompt(SYSTEM_MSG, prompt),
+        super::model::ModelArchitecture::Mixtral => mixtral_prompt(SYSTEM_MSG, prompt),
     }
 }
 
@@ -67,10 +67,10 @@ pub fn rag_prompt(prompt: String, passages: Vec<String>) -> String {
 ///
 /// # Returns
 /// Returns a string formatted specifically for input to a language model, adhering to a specified interaction schema.
-pub fn llama3_prompt(user_msg: String) -> String {
+pub fn llama3_prompt(system_msg: &str, user_msg: String) -> String {
     format!(
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
-        SYSTEM_MSG,
+        system_msg,
         user_msg
     )
 }
@@ -84,10 +84,10 @@ pub fn llama3_prompt(user_msg: String) -> String {
 ///
 /// # Returns
 /// Returns a string formatted specifically for input to a language model, adhering to a specified interaction schema.
-pub fn mixtral_prompt(user_msg: String) -> String {
+pub fn mixtral_prompt(system_msg: &str, user_msg: String) -> String {
     format!(
         "<s>[INST] {}\n\n{} [/INST]", 
-        SYSTEM_MSG,
+        system_msg,
         user_msg
     )
 }
@@ -111,7 +111,7 @@ pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
         passage_string,
         user_msg
     );
-    llama3_prompt(user_msg)
+    llama3_prompt(SYSTEM_RAG_MSG, user_msg)
 }
 
 
@@ -134,7 +134,7 @@ pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
         passage_string,
         user_msg
     );
-    mixtral_prompt(user_msg)
+    mixtral_prompt(SYSTEM_RAG_MSG, user_msg)
 }
 
 

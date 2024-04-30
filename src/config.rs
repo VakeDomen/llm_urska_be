@@ -13,8 +13,8 @@ pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Mixtral;
 // pub const MODEL_PATH: &str = "models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf";
 // pub const TOKENIZER_PATH: &str = "models/llama3-8b/tokenizer.json";
 
-pub const MODEL_PATH: &str = "models/mixtral7x8b/mixtral-8x7b-instuct-v0.1Q5_K_M.gguf";
-pub const TOKENIZER_PATH: &str = "models/mixtral7x8b/tokenizer.json";
+pub const MODEL_PATH: &str = "models/mixtral8x7b/mixtral-8x7b-instuct-v0.1Q5_K_M.gguf";
+pub const TOKENIZER_PATH: &str = "models/mixtral8x7b/tokenizer.json";
 
 pub const EMBEDDING_MODEL_PATH: &str = "models/bge-large-en-v1.5-ft";
 pub const SEED: u64 = 42;

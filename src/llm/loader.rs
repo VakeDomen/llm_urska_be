@@ -12,7 +12,7 @@ use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
-use crate::config::{EMBEDDING_MODEL_PATH, MODEL_PATH};
+use crate::config::{EMBEDDING_MODEL_PATH, MODEL_PATH, TOKENIZER_PATH};
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
 pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
@@ -116,7 +116,7 @@ fn load_llm_model(gpu_id: Option<usize>) -> Result<LoadedModel> {
         Ok(m) => m,
         Err(e) => panic!("Can't load model: {:#?}", e),
     };
-    let tokenizer = match load_tokenizer("models/llama3-8b/tokenizer.json") {
+    let tokenizer = match load_tokenizer(TOKENIZER_PATH) {
         Ok(t) => t,
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };

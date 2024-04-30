@@ -1,6 +1,14 @@
 use candle_transformers::generation::{LogitsProcessor, Sampling};
 use crate::config::{SEED, TEMPERATURE, TOP_K, TOP_P};
 
+
+#[derive(Debug)]
+pub enum ModelArchitecture {
+    Llama3,
+    Mixtral,
+}
+
+
 /// Sets up a logits processor based on predefined settings and sampling strategy.
 ///
 /// # Returns

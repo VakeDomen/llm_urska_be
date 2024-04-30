@@ -7,7 +7,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     config::{
-        REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
+        MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
     }, llm::{
         loader::{
             assign_model, ModelSelector, MODEL1, MODEL2
@@ -37,14 +37,36 @@ pub enum Prompt {
 ///
 /// # Returns
 /// Returns a `Result` with a formatted string suitable for LLM input if successful, or an error if the formatting fails.
-pub fn parse_prompt_to_raw(prompt: Prompt) -> Result<String> {
+pub fn parse_prompt_to_raw(prompt: Prompt) -> String {
     match prompt {
-        Prompt::PlainQuestion(prompt) => Ok(llama3_prompt(prompt)),
-        Prompt::RagPrompt(prompt, passages) => Ok(llama3_rag_prompt(prompt, passages)),
+        Prompt::PlainQuestion(prompt) => plain_question_prompt(prompt),
+        Prompt::RagPrompt(prompt, passages) => rag_prompt(prompt, passages),
     }
 }
 
+pub fn plain_question_prompt(prompt: String ) -> String {
+    match MODEL_ARCITECTURE {
+        super::model::ModelArchitecture::Llama3 => llama3_prompt(prompt),
+        super::model::ModelArchitecture::Mixtral => mixtral_prompt(prompt),
+    }
+}
 
+pub fn rag_prompt(prompt: String, passages: Vec<String>) -> String {
+    match MODEL_ARCITECTURE {
+        super::model::ModelArchitecture::Llama3 => llama3_rag_prompt(prompt, passages),
+        super::model::ModelArchitecture::Mixtral => mixtral_rag_prompt(prompt, passages),
+    }
+}
+
+/// Formats a plain user message for processing by a Llama3 model.
+///
+/// This function prepares a plain text message by incorporating predefined system messages for consistency in LLM input.
+///
+/// # Parameters
+/// - `user_msg`: The user's message or question to be formatted.
+///
+/// # Returns
+/// Returns a string formatted specifically for input to a language model, adhering to a specified interaction schema.
 pub fn llama3_prompt(user_msg: String) -> String {
     format!(
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
@@ -53,6 +75,33 @@ pub fn llama3_prompt(user_msg: String) -> String {
     )
 }
 
+/// Formats a plain user message for processing by a Mixtral8x7b model.
+///
+/// This function prepares a plain text message by incorporating predefined system messages for consistency in LLM input.
+///
+/// # Parameters
+/// - `user_msg`: The user's message or question to be formatted.
+///
+/// # Returns
+/// Returns a string formatted specifically for input to a language model, adhering to a specified interaction schema.
+pub fn mixtral_prompt(user_msg: String) -> String {
+    format!(
+        "<s>[INST] {}\n\n{} [/INST]", 
+        SYSTEM_MSG,
+        user_msg
+    )
+}
+
+/// Formats a RAG prompt by including relevant passages and a user message for processing by a Llama3 model.
+///
+/// This function constructs a prompt that incorporates passages for context along with the user's question, providing enriched input for the LLM.
+///
+/// # Parameters
+/// - `user_msg`: The user's question to be included.
+/// - `passages`: A list of relevant passages providing context to the question.
+///
+/// # Returns
+/// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
 pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
     let passage_string = passages
         .join("\n# Passage: ");
@@ -62,21 +111,58 @@ pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
         passage_string,
         user_msg
     );
-    format!(
-        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", 
-        SYSTEM_RAG_MSG,
-        user_msg
-    )
+    llama3_prompt(user_msg)
 }
 
 
-/// Generates model responses based on a given prompt using a specific tokenizer and model weights.
+/// Formats a RAG prompt by including relevant passages and a user message for processing by a Mixtral model.
 ///
-/// # Arguments
-/// * `prompt` - The prompt provided by the user.
+/// This function constructs a prompt that incorporates passages for context along with the user's question, providing enriched input for the LLM.
+///
+/// # Parameters
+/// - `user_msg`: The user's question to be included.
+/// - `passages`: A list of relevant passages providing context to the question.
 ///
 /// # Returns
-/// A `Result` containing the generated response string or an error.
+/// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
+pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
+    let passage_string = passages
+        .join("\n# Passage: ");
+
+    let user_msg = format!(
+        "# Passage:\n{}\n# Student question: \n{}",
+        passage_string,
+        user_msg
+    );
+    mixtral_prompt(user_msg)
+}
+
+
+pub fn get_eos_token() -> String {
+    match MODEL_ARCITECTURE {
+        super::model::ModelArchitecture::Llama3 => "<|eot_id|>".to_owned(),
+        super::model::ModelArchitecture::Mixtral => "</s>".to_owned(),
+    }
+}
+
+
+/// Generates a response from a language model based on the input prompt, and optionally handles real-time updates via WebSocket.
+///
+/// This function first assigns a model based on a toggle, then tokenizes and processes the input prompt for the model.
+/// It handles the complexities of input preparation, model invocation, and output generation, ensuring the response
+/// is appropriately clipped and generated according to specified parameters.
+///
+/// # Parameters
+/// - `prompt`: The input prompt provided in one of the supported formats, either plain or with context.
+/// - `websocket`: An optional mutable reference to a WebSocket stream for real-time interaction updates.
+///
+/// # Returns
+/// Returns a `Result` with the generated response as a string if successful. Any issues during processing will
+/// result in errors being returned.
+///
+/// # Errors
+/// - Returns an error if tokenization, model execution, or response generation fails.
+/// - Any interaction with the WebSocket that fails will also propagate as an error.
 pub async fn prompt_model(
     prompt: Prompt,
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
@@ -100,7 +186,7 @@ pub async fn prompt_model(
    
     flush_message("Tokenizing prompt...", &mut websocket, FlushType::Status).await?;
     // Parse the prompt to a raw string format.
-    let prompt_str = parse_prompt_to_raw(prompt)?;
+    let prompt_str = parse_prompt_to_raw(prompt);
     // Tokenize the prompt string for model processing.
     let tokens = tos
         .tokenizer()
@@ -161,8 +247,8 @@ pub async fn prompt_model(
     }
 
     // Continue generating tokens until the sample length is reached or an end-of-sentence token is encountered.
-    let eos_token = "<|eot_id|>";
-    let eos_token = *tos.tokenizer().get_vocab(true).get(eos_token).unwrap();
+    let eos_token = get_eos_token();
+    let eos_token = *tos.tokenizer().get_vocab(true).get(&eos_token).unwrap();
     let start_post_prompt = std::time::Instant::now();
     let mut sampled = 0;
     for index in 0..to_sample {

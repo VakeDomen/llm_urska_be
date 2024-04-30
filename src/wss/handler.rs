@@ -22,25 +22,25 @@ pub async fn handle(
 }
 
 async fn handle_que_len(
-    mut websocket: &mut WebSocketStream<TcpStream>
+    websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     let len = que_len().await;
-    send_message(&mut websocket, WSSMessage::QueLenResponse(len)).await
+    send_message(websocket, WSSMessage::QueLenResponse(len)).await
 }
 
 
 async fn handle_que_pos(
     socket_id: String,
-    mut websocket: &mut WebSocketStream<TcpStream>
+    websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     let pos = que_pos(&socket_id).await;
-    send_message(&mut websocket, WSSMessage::QuePosResponse(pos)).await
+    send_message(websocket, WSSMessage::QuePosResponse(pos)).await
 }
 
 async fn handle_prompt(
     question: String,
     socket_id: String, 
-    mut websocket: &mut WebSocketStream<TcpStream>
+    websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     inc_que(socket_id.clone()).await;
     send_message(websocket, WSSMessage::Success).await?;
@@ -64,8 +64,8 @@ async fn handle_prompt(
     };
 
     let _ = match prompt_model(prompt, Some(websocket)).await {
-        Ok(response) => send_message(&mut websocket, WSSMessage::PromptResponse(response)).await,
-        Err(e) => send_message(&mut websocket, WSSMessage::Error(e.to_string())).await,
+        Ok(response) => send_message(websocket, WSSMessage::PromptResponse(response)).await,
+        Err(e) => send_message(websocket, WSSMessage::Error(e.to_string())).await,
     };
     dec_que(socket_id).await;
     Ok(())

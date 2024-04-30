@@ -1,9 +1,6 @@
-use candle_core::Tensor;
-use llm::{loader::load_bert_model, prompt::{prompt_model, Prompt}};
 use logging::logger::init_logging;
-use tokenizers::PaddingParams;
 use wss::server::start_server;
-use anyhow::{Error, Result};
+use anyhow::Result;
 
 mod llm;
 mod config;

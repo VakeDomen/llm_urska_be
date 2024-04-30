@@ -1,6 +1,6 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{tungstenite::{Error, Message}, WebSocketStream};
+use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use log::error;
 use anyhow::Result;
 use crate::storage::cache_wss::SOCKETS;

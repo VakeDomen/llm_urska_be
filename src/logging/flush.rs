@@ -26,8 +26,8 @@ pub async fn flush_message(
 ) -> Result<()> {
     if let Some(ws) = websocket {
         match flush_type {
-            FlushType::Token => send_message(*ws, WSSMessage::PromptResponseToken(content.into())).await?,
-            FlushType::Status => send_message(*ws, WSSMessage::PromptStatus(content.into())).await?,
+            FlushType::Token => send_message(ws, WSSMessage::PromptResponseToken(content.into())).await?,
+            FlushType::Status => send_message(ws, WSSMessage::PromptStatus(content.into())).await?,
         }
         
     }

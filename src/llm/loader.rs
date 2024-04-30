@@ -24,11 +24,6 @@ pub enum ModelSelector {
     Second,
 }
 
-pub enum ModelLoadFormat {
-    Gguf,
-    PythorchBin,
-}
-
 pub static MODEL_TOGGLER: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(0));
 pub static MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     match load_model(Some(0)) {
@@ -172,7 +167,7 @@ fn load_pybin_bert_model_from_disk(model_path: &str, device: &Device) -> Result<
             error!("Failed parsing VarBuilder from PytorchBin model path: {:#?}", e);
             return Err(e.into());
         },
-    };;
+    };
     Ok(BertModel::load(vb, &config)?)
 }
 

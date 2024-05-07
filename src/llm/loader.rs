@@ -12,7 +12,7 @@ use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
-use crate::config::{EMBEDDING_MODEL_PATH, MODEL_PATH, TOKENIZER_PATH};
+use crate::config::{EMBEDDING_MODEL_PATH, EMBEDDING_MODEL_TYPE, EMBEDDING_TOKENIZER, MODEL_PATH, TOKENIZER_PATH};
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
 pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
@@ -25,6 +25,11 @@ pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
 pub enum ModelSelector {
     First,
     Second,
+}
+
+pub enum LoadType {
+    PyBin,
+    Safetensors,
 }
 
 /// Static global state for toggling between two models. This is used to manage which model is currently active.
@@ -45,6 +50,13 @@ pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     match load_llm_model(Some(1)) {
         Ok(m) => Mutex::new(m),
         Err(e) => panic!("Can't lazy load model: {:#?}", e),
+    }
+});
+
+pub static EMBEDDING_MODEL: Lazy<Mutex<LoadedEmbeddingModel>> = Lazy::new(|| {
+    match load_bert_model(Some(1)) {
+        Ok(m) => Mutex::new(m),
+        Err(e) => panic!("Can't lazy load embedding model: {:#?}", e),
     }
 });
 
@@ -84,11 +96,17 @@ pub async fn assign_model() -> ModelSelector {
 ///   or incorrect model/tokenizer configurations.
 pub fn load_bert_model(gpu_id: Option<usize>) -> Result<LoadedEmbeddingModel> {
     let device = load_device(gpu_id);
-    let model = match load_pybin_bert_model_from_disk(EMBEDDING_MODEL_PATH, &device) { 
+
+    let model_load = match EMBEDDING_MODEL_TYPE {
+        LoadType::PyBin => load_pybin_bert_model_from_disk(EMBEDDING_MODEL_PATH, &device),
+        LoadType::Safetensors => load_safetensors_bert_model_from_disk(EMBEDDING_MODEL_PATH, &device),
+    };
+
+    let model = match model_load { 
         Ok(m) => m,
         Err(e) => panic!("Can't load embedding model: {:#?}", e),
     };
-    let tokenizer = match load_tokenizer(&format!("{}/tokenizer.json", EMBEDDING_MODEL_PATH)) {
+    let tokenizer = match load_tokenizer(EMBEDDING_TOKENIZER) {
         Ok(t) => t,
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };
@@ -208,6 +226,37 @@ fn load_pybin_bert_model_from_disk(model_path: &str, device: &Device) -> Result<
     };
     Ok(BertModel::load(vb, &config)?)
 }
+
+
+
+
+fn load_safetensors_bert_model_from_disk(model_path: &str, device: &Device) -> Result<BertModel> {
+    let config = match std::fs::read_to_string(format!("{}/config.json", model_path)) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Failed loading embedding model config from file: {:#?}", e);
+            return Err(e.into());
+        },
+    };
+    let config: Config = match serde_json::from_str(&config){
+        Ok(c) => c,
+        Err(e) => {
+            println!("Failed parsing embedding model config from JSON string: {:#?}", e);
+            return Err(e.into());
+        },
+    };
+    let model_path_string = format!("{}/model.safetensors", model_path);
+    let model_path = Path::new(&model_path_string);
+    let vb = match unsafe { VarBuilder::from_mmaped_safetensors(&vec![model_path], DTYPE, device) }{
+        Ok(c) => c,
+        Err(e) => {
+            println!("Failed parsing VarBuilder from PytorchBin model path: {:#?}", e);
+            return Err(e.into());
+        },
+    };
+    Ok(BertModel::load(vb, &config)?)
+}
+
 
 /// Loads a GGUF model from disk into memory, initializing it with the given device.
 ///

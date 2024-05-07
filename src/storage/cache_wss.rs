@@ -23,8 +23,11 @@ pub async fn inc_que(socket_id: String) {
 /// - `socket_id`: The unique identifier of a WebSocket connection to remove from the queue.
 pub async fn dec_que(socket_id: String) {
     let pos = que_pos(&socket_id).await;
+    if pos < 0 {
+        return;
+    }
     let mut que = QUEUE.lock().await;
-    que.remove(pos);
+    que.remove(pos as usize);
 }
 
 /// Returns the current length of the queue.
@@ -46,7 +49,10 @@ pub async fn que_len() -> usize {
 ///
 /// # Panics
 /// - Panics if the socket ID does not exist in the queue.
-pub async fn que_pos(socket_id: &String) -> usize {
+pub async fn que_pos(socket_id: &String) -> i32 {
     let que = QUEUE.lock().await;
-    que.iter().position(|x| *x == *socket_id).unwrap()
+    match que.iter().position(|x| *x == *socket_id) {
+        Some(pos) => pos as i32,
+        None => -1,
+    }
 }

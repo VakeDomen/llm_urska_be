@@ -82,10 +82,15 @@ async fn handle_prompt(
     send_message(websocket, WSSMessage::Success).await?;
     
     let mut pos = que_pos(&socket_id).await;
+    let mut len = que_len().await;
+    send_message(websocket, WSSMessage::QuePosResponse(pos)).await?;
+    send_message(websocket, WSSMessage::QueLenResponse(len)).await?;
     while pos > 2 {
-        send_message(websocket, WSSMessage::QuePosResponse(pos)).await?;
         thread::sleep(Duration::from_secs(1));
         pos = que_pos(&socket_id).await;
+        len = que_len().await;
+        send_message(websocket, WSSMessage::QuePosResponse(pos)).await?;
+        send_message(websocket, WSSMessage::QueLenResponse(len)).await?;
     }
 
     let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
@@ -120,7 +125,7 @@ async fn handle_prompt(
 fn extract_node_content(response: SearchResponse) -> Vec<String> {
     let mut node_contents = Vec::new();
     for point in &response.result {
-        if let Some(content) = point.payload.get("_node_content") {
+        if let Some(content) = point.payload.get("text") {
             if let Some(text) = content.as_str() {
                 node_contents.push(text.to_string());
             }

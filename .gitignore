@@ -16,3 +16,4 @@ Cargo.lock
 .env
 models
 qdrant_storage
+ignore

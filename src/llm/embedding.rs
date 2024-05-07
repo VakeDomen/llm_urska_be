@@ -5,6 +5,8 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{llm::loader::load_bert_model, logging::flush::{flush_message, FlushType}};
 
+use super::loader::EMBEDDING_MODEL;
+
 
 /// Generates a normalized L2 embedding for a given text prompt using a pre-loaded BERT model.
 ///
@@ -27,19 +29,19 @@ pub async fn generate_prompt_embedding(
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<Tensor> {
     flush_message("Loading embedding model...", &mut websocket, FlushType::Status).await?;
-    let (model, tokenizer, device) = load_bert_model(Some(0))?;
-    
+    // let (model, tokenizer, device) = load_bert_model(Some(0))?;
+    let model_pack = EMBEDDING_MODEL.lock().await;
     flush_message("Encoding embedding prompt...", &mut websocket, FlushType::Status).await?;
-    let tokens = tokenizer
+    let tokens = model_pack.1
             .encode(prompt, true)
             .map_err(Error::msg)?
             .get_ids()
             .to_vec();
-    let token_ids = Tensor::new(&tokens[..], &device)?.unsqueeze(0)?;
+    let token_ids = Tensor::new(&tokens[..], &model_pack.2)?.unsqueeze(0)?;
     let token_type_ids = token_ids.zeros_like()?;
     
     flush_message("Generating word embeddings...", &mut websocket, FlushType::Status).await?;
-    let embeddings = model.forward(&token_ids, &token_type_ids)?;
+    let embeddings = model_pack.0.forward(&token_ids, &token_type_ids)?;
 
 
     // Apply some avg-pooling by taking the mean embedding value for all tokens (including padding)
@@ -48,7 +50,6 @@ pub async fn generate_prompt_embedding(
     let embeddings = (embeddings.sum(1)? / (n_tokens as f64))?;
     
     let embeddings = normalize_l2(&embeddings)?;
-    
     flush_message("Prompt embeddings generated!", &mut websocket, FlushType::Status).await?;
     Ok(embeddings)
 } 

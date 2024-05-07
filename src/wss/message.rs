@@ -29,7 +29,7 @@ pub enum WSSMessage {
     /// Response to client with the current queue length.
     QueLenResponse(usize),
     /// Response to client with the position in the queue.
-    QuePosResponse(usize),
+    QuePosResponse(i32),
     /// Generic success message.
     Success,
     /// Error message with details.

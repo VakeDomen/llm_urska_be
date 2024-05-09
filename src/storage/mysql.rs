@@ -15,7 +15,7 @@ use super::models::prompt::InsertablePrompt;
 
 // Create a static MySQL connection pool wrapped in a Mutex and Lazy for thread safety and one-time initialization.
 static MYSQL_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| {
-    let pool = match Pool::new(MYSQL_URL) {
+    let pool = match Pool::new(MYSQL_URL.as_str()) {
         Ok(p) => p,
         Err(e) => panic!("Can't establish MySQL DB connection: {:#?}", e),
     };

@@ -18,12 +18,6 @@ pub const SYSTEM_RAG_MSG: &str = "Your name is Urška. You are a chatbot asistan
 pub const HYDE_SYSTEM_MSG: &str = "Your task is to generate a short markdown passage that should resable a passage that could be found in information of University of Primorska - Faculty of Mathematics, Natural Sciences and Information Technologies that is ment to answer stuent questions. In terms of markdown you are allowed to use headings and lists and tables.";
 
 pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Mixtral;
-// pub const MODEL_PATH: &str = "models/llama3-70b/Meta-Llama-3-70B-Instruct.Q4_K_S.gguf";
-// pub const TOKENIZER_PATH: &str = "models/llama3-70b/tokenizer.json";
-
-// pub const MODEL_PATH: &str = "models/llama3-8b/Meta-Llama-3-8B-Instruct.Q5_K_M.gguf";
-// pub const TOKENIZER_PATH: &str = "models/llama3-8b/tokenizer.json";
-
 pub const MODEL_PATH: &str = "models/mixtral8x7b/mixtral-8x7b-instuct-v0.1Q5_K_M.gguf";
 pub const TOKENIZER_PATH: &str = "models/mixtral8x7b/tokenizer.json";
 

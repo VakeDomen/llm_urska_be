@@ -35,15 +35,17 @@ pub fn insert_prompt(prompt: InsertablePrompt) -> Result<()> {
 
     // Start a transaction
     conn.exec_drop(
-        r"INSERT INTO prompts (id, question, response, embedding_time, response_time, que_time, total_time, error, rating)
-            VALUES (:id, :question, :response, :embedding_time, :response_time, :que_time, :total_time, :error, :rating)",
+        r"INSERT INTO prompts (id, question, hyde_prompt, response, hyde_time, embedding_time, response_time, que_time, total_time, error, rating)
+            VALUES (:id, :question, :hyde_prompt, :response, :hyde_time, :embedding_time, :response_time, :que_time, :total_time, :error, :rating)",
         params! {
             "id" => &prompt.id,
             "question" => &prompt.question,
+            "hyde_prompt" => &prompt.hyde_prompt,
             "response" => &prompt.response,
+            "que_time" => prompt.que_time.as_millis() as i64,
+            "hyde_time" => prompt.hyde_time.as_millis() as i64,
             "embedding_time" => prompt.embedding_time.as_millis() as i64,
             "response_time" => prompt.response_time.as_millis() as i64,
-            "que_time" => prompt.que_time.as_millis() as i64,
             "total_time" => prompt.total_time.as_millis() as i64,
             "error" => &prompt.error,
             "rating" => &prompt.rating,

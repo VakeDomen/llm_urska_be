@@ -239,7 +239,11 @@ pub async fn prompt_model(
     };
     
     // Setup for generating model responses.
-    flush_message("Generating tokens...", &mut websocket, FlushType::Status).await?;
+    match hyde {
+        true => flush_message("Figuring out question...", &mut websocket, FlushType::Status).await?,
+        false => flush_message("Generating tokens...", &mut websocket, FlushType::Status).await?,
+    }
+    
     let mut all_tokens = vec![];
     let mut logits_processor = setup_logit_procesing();
 
@@ -267,7 +271,9 @@ pub async fn prompt_model(
     
     // Collect chunks of the generated response.
     if let Some(token) = tos.next_token(next_token)? {
-        let _ = flush_message(&token, &mut websocket, FlushType::Token).await;
+        if !hyde {
+            let _ = flush_message(&token, &mut websocket, FlushType::Token).await;
+        }
         response_chunks.push(token);
     }
 
@@ -293,7 +299,9 @@ pub async fn prompt_model(
         next_token = logits_processor.sample(&logits)?;
         all_tokens.push(next_token);
         if let Some(token) = tos.next_token(next_token)? {
-            let _ = flush_message(&token, &mut websocket, FlushType::Token).await;
+            if !hyde {
+                let _ = flush_message(&token, &mut websocket, FlushType::Token).await;
+            }
             response_chunks.push(token);
         }
         sampled += 1;
@@ -306,7 +314,9 @@ pub async fn prompt_model(
     if VERBOSE_PROMPT {
         // Optionally print the final output and performance stats if verbose logging is enabled.
         if let Some(rest) = tos.decode_rest().map_err(Error::msg)? {
-            let _ = flush_message(&rest, &mut websocket, FlushType::Token).await;
+            if !hyde {
+                let _ = flush_message(&rest, &mut websocket, FlushType::Token).await;
+            }
             response_chunks.push(rest);
         }
         std::io::stdout().flush()?;
@@ -322,7 +332,9 @@ pub async fn prompt_model(
         );
     }
 
-    flush_message("Done!", &mut websocket, FlushType::Status).await?;
+    if !hyde {
+        flush_message("Done!", &mut websocket, FlushType::Status).await?;
+    }
     
     Ok(response_chunks.join(""))
 }

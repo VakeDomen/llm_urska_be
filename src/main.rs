@@ -1,6 +1,7 @@
 use logging::logger::init_logging;
 use wss::server::start_server;
 use anyhow::Result;
+use dotenv::dotenv;
 
 mod llm;
 mod config;
@@ -10,6 +11,7 @@ mod logging;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv().ok();
     init_logging()?;
     start_server().await;
     Ok(())

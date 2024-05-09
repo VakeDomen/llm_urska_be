@@ -1,9 +1,12 @@
+use std::env;
+
 use crate::llm::{loader::LoadType, model::ModelArchitecture};
 
 // WSS Config
 pub const LISTEN_ADDRESS: &str = "127.0.0.1:6668";
 pub const QDRANT_SERVER: &str = "http://localhost:6334";
 pub const QDRANT_COLLECTION: &str = "urska_bge_m3_decorated";
+pub const MYSQL_URL: String = env::var("DATABASE_URL").unwrap_or_else( |_| "mysql://user:pw@localhost/db".to_string());
 
 pub const USE_HYDE: bool = true;
 

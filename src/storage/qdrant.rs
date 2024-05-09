@@ -42,7 +42,7 @@ pub async fn vector_search(embedding: Tensor) -> Result<SearchResponse> {
         .search_points(&SearchPoints {
             collection_name: QDRANT_COLLECTION.to_string(),
             vector: embedding_vec,
-            limit: 4,
+            limit: 3,
             with_payload: Some(true.into()),
             ..Default::default()
         })

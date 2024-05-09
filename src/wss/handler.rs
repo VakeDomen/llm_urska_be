@@ -1,6 +1,6 @@
 use std::{thread, time::Duration};
 
-use crate::{llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, qdrant::vector_search}};
+use crate::{config::USE_HYDE, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -78,9 +78,13 @@ async fn handle_prompt(
     socket_id: String, 
     websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
+    // setup
+    let state = NewPrompt::from(question.clone());
     inc_que(socket_id.clone()).await;
     send_message(websocket, WSSMessage::Success).await?;
     
+    // que
+    let state = state.enter_que();
     let mut pos = que_pos(&socket_id).await;
     let mut len = que_len().await;
     send_message(websocket, WSSMessage::QuePosResponse(pos)).await?;
@@ -93,22 +97,50 @@ async fn handle_prompt(
         send_message(websocket, WSSMessage::QueLenResponse(len)).await?;
     }
 
-    let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
+    // hyde
+    let (hyde_prompt, state) = if USE_HYDE {
+        let state = state.hyde_generation();
+        match prompt_model(Prompt::Hyde(question.clone()), true, Some(websocket)).await {
+            Ok(generated_response) => {
+                send_message(websocket, WSSMessage::PromptResponse(generated_response.clone())).await?;
+                (generated_response.clone(), state.start_embedding(generated_response))
+            },
+            Err(e) => {
+                send_message(websocket, WSSMessage::Error(e.to_string())).await?;
+                (question.clone(), state.start_embedding(e.to_string()))
+            },
+        }
+    } else {
+        (question.clone(), state.start_embedding())
+    };
+    
+    // embedding
+    let emb = generate_prompt_embedding(&hyde_prompt, Some(websocket)).await?;
     let passages = extract_node_content(vector_search(emb).await?);
     let number_of_results = passages.len();
     for passage in &passages {
-        let _ = send_message(websocket, WSSMessage::PromptPassage(passage.clone())).await;
+        let _ = send_message(websocket, WSSMessage::PromptPassage(passage.1.clone())).await;
     }
     let prompt = match number_of_results {
         0 => Prompt::PlainQuestion(question),
-        _ => Prompt::RagPrompt(question, passages),
+        _ => Prompt::RagPrompt(question, passages.clone()),
     };
 
-    let _ = match prompt_model(prompt, Some(websocket)).await {
-        Ok(response) => send_message(websocket, WSSMessage::PromptResponse(response)).await,
-        Err(e) => send_message(websocket, WSSMessage::Error(e.to_string())).await,
+    // final response
+    let state = state.start_responding(passages);
+    let response = match prompt_model(prompt, false, Some(websocket)).await {
+        Ok(generated_response) => {
+            send_message(websocket, WSSMessage::PromptResponse(generated_response.clone())).await?;
+            generated_response
+        },
+        Err(e) => {
+            send_message(websocket, WSSMessage::Error(e.to_string())).await?;
+            e.to_string()
+        },
     };
     dec_que(socket_id).await;
+    let state = state.finalize(response);
+    insert_prompt(state)?;
     Ok(())
 }
 
@@ -122,14 +154,26 @@ async fn handle_prompt(
 ///
 /// # Returns
 /// Returns a vector of strings, each representing the content of a node extracted from the search response.
-fn extract_node_content(response: SearchResponse) -> Vec<String> {
+fn extract_node_content(response: SearchResponse) -> Vec<(String, String)> {
     let mut node_contents = Vec::new();
     for point in &response.result {
+        let mut passage_id = "".to_string();
+        let mut text = "".to_string();
+
         if let Some(content) = point.payload.get("text") {
-            if let Some(text) = content.as_str() {
-                node_contents.push(text.to_string());
+            if let Some(text_l) = content.as_str() {
+                text = text_l.to_string();
             }
         }
+
+
+        if let Some(content) = point.payload.get("id") {
+            if let Some(id) = content.as_str() {
+                passage_id = id.to_string();
+            }
+        }
+
+        node_contents.push((passage_id, text));
     }
     node_contents
 }

@@ -7,7 +7,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     config::{
-        MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
+        HYDE_MODEL_ARCITECTURE, HYDE_SYSTEM_MSG, MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
     }, llm::{
         loader::{
             assign_model, ModelSelector, MODEL1, MODEL2
@@ -17,6 +17,8 @@ use crate::{
     }, logging::flush::{flush_message, FlushType}
 };
 
+use super::loader::{HYDE_MODEL1, HYDE_MODEL2};
+
 /// Represents different types of prompts that can be processed by the system.
 ///
 /// This enum categorizes prompts into plain questions and questions with associated passages for Retrieval-Augmented Generation (RAG).
@@ -25,7 +27,9 @@ pub enum Prompt {
     /// Represents a plain question without associated contextual information.
     PlainQuestion(String),
     /// Represents a question accompanied by a set of relevant passages, used for RAG.
-    RagPrompt(String, Vec<String>)
+    RagPrompt(String, Vec<(String, String)>),
+    /// Represents a question that should generate imaginary context information.
+    Hyde(String)
 }
 
 /// Parses a `Prompt` into a formatted string that can be used as input to an LLM.
@@ -41,17 +45,25 @@ pub fn parse_prompt_to_raw(prompt: Prompt) -> String {
     match prompt {
         Prompt::PlainQuestion(prompt) => plain_question_prompt(prompt),
         Prompt::RagPrompt(prompt, passages) => rag_prompt(prompt, passages),
+        Prompt::Hyde(prompt) => hyde_prompt(prompt),
     }
 }
 
-pub fn plain_question_prompt(prompt: String ) -> String {
+pub fn plain_question_prompt(prompt: String) -> String {
     match MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_prompt(SYSTEM_MSG, prompt),
         super::model::ModelArchitecture::Mixtral => mixtral_prompt(SYSTEM_MSG, prompt),
     }
 }
 
-pub fn rag_prompt(prompt: String, passages: Vec<String>) -> String {
+pub fn hyde_prompt(prompt: String) -> String {
+    match HYDE_MODEL_ARCITECTURE {
+        super::model::ModelArchitecture::Llama3 => llama3_prompt(HYDE_SYSTEM_MSG, prompt),
+        super::model::ModelArchitecture::Mixtral => mixtral_prompt(HYDE_SYSTEM_MSG, prompt),
+    }
+}
+
+pub fn rag_prompt(prompt: String, passages: Vec<(String, String)>) -> String {
     match MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_rag_prompt(prompt, passages),
         super::model::ModelArchitecture::Mixtral => mixtral_rag_prompt(prompt, passages),
@@ -102,8 +114,11 @@ pub fn mixtral_prompt(system_msg: &str, user_msg: String) -> String {
 ///
 /// # Returns
 /// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
-pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
+pub fn llama3_rag_prompt(user_msg: String, passages: Vec<(String, String)>) -> String {
     let passage_string = passages
+        .iter()
+        .map(|p| p.1.clone())
+        .collect::<Vec<String>>()
         .join("\n# Passage: ");
 
     let user_msg = format!(
@@ -125,8 +140,11 @@ pub fn llama3_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
 ///
 /// # Returns
 /// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
-pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
+pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<(String, String)>) -> String {
     let passage_string = passages
+        .iter()
+        .map(|p| p.1.clone())
+        .collect::<Vec<String>>()
         .join("\n# Passage: ");
 
     let user_msg = format!(
@@ -138,8 +156,12 @@ pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<String>) -> String {
 }
 
 
-pub fn get_eos_token() -> String {
-    match MODEL_ARCITECTURE {
+pub fn get_eos_token(hyde: bool) -> String {
+    let architecutre = match hyde {
+        true => HYDE_MODEL_ARCITECTURE,
+        false => MODEL_ARCITECTURE,
+    };
+    match architecutre {
         super::model::ModelArchitecture::Llama3 => "<|eot_id|>".to_owned(),
         super::model::ModelArchitecture::Mixtral => "</s>".to_owned(),
     }
@@ -165,15 +187,18 @@ pub fn get_eos_token() -> String {
 /// - Any interaction with the WebSocket that fails will also propagate as an error.
 pub async fn prompt_model(
     prompt: Prompt,
+    hyde: bool,
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
 
     flush_message("Assigning LLM model...", &mut websocket, FlushType::Status).await?;
 
-    let model_selector = assign_model().await;
+    let model_selector = assign_model(hyde).await;
     let mut loaded_model = match model_selector {
         ModelSelector::First => MODEL1.lock().await,
         ModelSelector::Second => MODEL2.lock().await,
+        ModelSelector::HydeFirst => HYDE_MODEL1.lock().await,
+        ModelSelector::HydeSecond => HYDE_MODEL2.lock().await,
     };
     
     let tokenizer = loaded_model.1.clone();
@@ -247,7 +272,7 @@ pub async fn prompt_model(
     }
 
     // Continue generating tokens until the sample length is reached or an end-of-sentence token is encountered.
-    let eos_token = get_eos_token();
+    let eos_token = get_eos_token(hyde);
     let eos_token = *tos.tokenizer().get_vocab(true).get(&eos_token).unwrap();
     let start_post_prompt = std::time::Instant::now();
     let mut sampled = 0;

@@ -6,13 +6,13 @@ use candle_core::{quantized::gguf_file::Content, Device};
 use candle_nn::VarBuilder;
 use candle_transformers::models::{
     bert::{BertModel, Config, DTYPE}, 
-    quantized_llama::{ModelWeights, MAX_SEQ_LEN}
+    quantized_llama::{ModelWeights, MAX_SEQ_LEN},
 };
 use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
-use crate::config::{EMBEDDING_MODEL_PATH, EMBEDDING_MODEL_TYPE, EMBEDDING_TOKENIZER, MODEL_PATH, TOKENIZER_PATH};
+use crate::config::{EMBEDDING_MODEL_PATH, EMBEDDING_MODEL_TYPE, EMBEDDING_TOKENIZER, HYDE_MODEL_PATH, HYDE_TOKENIZER_PATH, MODEL_PATH, TOKENIZER_PATH};
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
 pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
@@ -25,6 +25,8 @@ pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
 pub enum ModelSelector {
     First,
     Second,
+    HydeFirst,
+    HydeSecond,
 }
 
 pub enum LoadType {
@@ -38,7 +40,7 @@ pub static MODEL_TOGGLER: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(0));
 /// Static global state holding the first loaded model.
 /// Panics if the model fails to load during initialization.
 pub static MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
-    match load_llm_model(Some(0)) {
+    match load_llm_model(MODEL_PATH, TOKENIZER_PATH, Some(0)) {
         Ok(m) => Mutex::new(m),
         Err(e) => panic!("Can't lazy load model: {:#?}", e),
     }
@@ -47,7 +49,25 @@ pub static MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
 /// Static global state holding the second loaded model.
 /// Panics if the model fails to load during initialization.
 pub static MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
-    match load_llm_model(Some(1)) {
+    match load_llm_model(MODEL_PATH, TOKENIZER_PATH, Some(1)) {
+        Ok(m) => Mutex::new(m),
+        Err(e) => panic!("Can't lazy load model: {:#?}", e),
+    }
+});
+
+/// Static global state holding the first loaded model.
+/// Panics if the model fails to load during initialization.
+pub static HYDE_MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
+    match load_llm_model(HYDE_MODEL_PATH, HYDE_TOKENIZER_PATH, Some(0)) {
+        Ok(m) => Mutex::new(m),
+        Err(e) => panic!("Can't lazy load model: {:#?}", e),
+    }
+});
+
+/// Static global state holding the second loaded model.
+/// Panics if the model fails to load during initialization.
+pub static HYDE_MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
+    match load_llm_model(HYDE_MODEL_PATH, HYDE_TOKENIZER_PATH, Some(1)) {
         Ok(m) => Mutex::new(m),
         Err(e) => panic!("Can't lazy load model: {:#?}", e),
     }
@@ -67,15 +87,25 @@ pub static EMBEDDING_MODEL: Lazy<Mutex<LoadedEmbeddingModel>> = Lazy::new(|| {
 ///
 /// # Returns
 /// Returns `ModelSelector::First` if the first model is selected, otherwise returns `ModelSelector::Second`.
-pub async fn assign_model() -> ModelSelector {
+pub async fn assign_model(hyde: bool) -> ModelSelector {
     let mut toggle = MODEL_TOGGLER.lock().await;
-    *toggle += 1;
-    *toggle %= 2;
-    if *toggle == 0 {
+    if hyde {
+        if *toggle == 0 {
+            return ModelSelector::HydeFirst;
+        } else {
+            return ModelSelector::HydeSecond;
+        }
+    }
+    
+    let model = if *toggle == 0 {
         ModelSelector::First
     } else {
         ModelSelector::Second
-    }
+    };
+    
+    *toggle += 1;
+    *toggle %= 2;
+    model
 }
 
 
@@ -128,13 +158,13 @@ pub fn load_bert_model(gpu_id: Option<usize>) -> Result<LoadedEmbeddingModel> {
 /// # Panics
 /// - Panics if the LLM or tokenizer cannot be loaded from their respective paths. This could be due to issues such as incorrect file paths,
 ///   configuration errors, or hardware compatibility problems.
-fn load_llm_model(gpu_id: Option<usize>) -> Result<LoadedModel> {
+fn load_llm_model(model: &str, tokenizer: &str, gpu_id: Option<usize>) -> Result<LoadedModel> {
     let device = load_device(gpu_id);
-    let model = match load_gguf_model_from_disk(MODEL_PATH, &device) { 
+    let model = match load_gguf_model_from_disk(model, &device) { 
         Ok(m) => m,
         Err(e) => panic!("Can't load model: {:#?}", e),
     };
-    let tokenizer = match load_tokenizer(TOKENIZER_PATH) {
+    let tokenizer = match load_tokenizer(tokenizer) {
         Ok(t) => t,
         Err(e) => panic!("Can't load tokenizer: {:#?}", e),
     };

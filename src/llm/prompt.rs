@@ -8,7 +8,7 @@ use tokio_tungstenite::WebSocketStream;
 use crate::{
     config::{
         HYDE_MODEL_ARCITECTURE, HYDE_SYSTEM_MSG, MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
-    }, llm::{
+    }, controllers::collector::Passage, llm::{
         loader::{
             assign_model, ModelSelector, MODEL1, MODEL2
         },
@@ -27,7 +27,7 @@ pub enum Prompt {
     /// Represents a plain question without associated contextual information.
     PlainQuestion(String),
     /// Represents a question accompanied by a set of relevant passages, used for RAG.
-    RagPrompt(String, Vec<(String, String)>),
+    RagPrompt(String, Vec<Passage>),
     /// Represents a question that should generate imaginary context information.
     Hyde(String)
 }
@@ -63,7 +63,7 @@ pub fn hyde_prompt(prompt: String) -> String {
     }
 }
 
-pub fn rag_prompt(prompt: String, passages: Vec<(String, String)>) -> String {
+pub fn rag_prompt(prompt: String, passages: Vec<Passage>) -> String {
     match MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_rag_prompt(prompt, passages),
         super::model::ModelArchitecture::Mixtral => mixtral_rag_prompt(prompt, passages),
@@ -114,10 +114,10 @@ pub fn mixtral_prompt(system_msg: &str, user_msg: String) -> String {
 ///
 /// # Returns
 /// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
-pub fn llama3_rag_prompt(user_msg: String, passages: Vec<(String, String)>) -> String {
+pub fn llama3_rag_prompt(user_msg: String, passages: Vec<Passage>) -> String {
     let passage_string = passages
         .iter()
-        .map(|p| p.1.clone())
+        .map(|p| p.text.clone())
         .collect::<Vec<String>>()
         .join("\n# Passage: ");
 
@@ -140,10 +140,10 @@ pub fn llama3_rag_prompt(user_msg: String, passages: Vec<(String, String)>) -> S
 ///
 /// # Returns
 /// Returns a string formatted to include multiple context passages and the user's question, specifically designed for input to a language model.
-pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<(String, String)>) -> String {
+pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<Passage>) -> String {
     let passage_string = passages
         .iter()
-        .map(|p| p.1.clone())
+        .map(|p| p.text.clone())
         .collect::<Vec<String>>()
         .join("\n# Passage: ");
 

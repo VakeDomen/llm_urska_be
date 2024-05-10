@@ -1,6 +1,6 @@
 use std::{thread, time::Duration};
 
-use crate::{config::USE_HYDE, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
+use crate::{config::USE_HYDE, controllers::collector::{extract_node_content, Passage}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -119,7 +119,7 @@ async fn handle_prompt(
     let passages = extract_node_content(vector_search(emb).await?);
     let number_of_results = passages.len();
     for passage in &passages {
-        let _ = send_message(websocket, WSSMessage::PromptPassage(passage.1.clone())).await;
+        let _ = send_message(websocket, WSSMessage::PromptPassage(passage.text.clone())).await;
     }
     let prompt = match number_of_results {
         0 => Prompt::PlainQuestion(question),
@@ -144,36 +144,3 @@ async fn handle_prompt(
     Ok(())
 }
 
-/// Extracts the content of nodes from a search response into a vector of strings.
-///
-/// This function parses the payload of each search result point, looking specifically for a field labeled `_node_content`.
-/// It gathers all such content into a list, which represents extracted data from a search engine's response.
-///
-/// # Parameters
-/// - `response`: A `SearchResponse` object containing the results from a search query.
-///
-/// # Returns
-/// Returns a vector of strings, each representing the content of a node extracted from the search response.
-fn extract_node_content(response: SearchResponse) -> Vec<(String, String)> {
-    let mut node_contents = Vec::new();
-    for point in &response.result {
-        let mut passage_id = "".to_string();
-        let mut text = "".to_string();
-
-        if let Some(content) = point.payload.get("text") {
-            if let Some(text_l) = content.as_str() {
-                text = text_l.to_string();
-            }
-        }
-
-
-        if let Some(content) = point.payload.get("id") {
-            if let Some(id) = content.as_str() {
-                passage_id = id.to_string();
-            }
-        }
-
-        node_contents.push((passage_id, text));
-    }
-    node_contents
-}

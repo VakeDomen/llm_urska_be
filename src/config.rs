@@ -2,7 +2,7 @@ use std::env;
 
 use once_cell::sync::Lazy;
 
-use crate::llm::{loader::LoadType, model::ModelArchitecture};
+use crate::{controllers::collector::Collector, llm::{loader::LoadType, model::ModelArchitecture}};
 
 // WSS Config
 pub const LISTEN_ADDRESS: &str = "127.0.0.1:6668";
@@ -11,6 +11,15 @@ pub const QDRANT_COLLECTION: &str = "urska_bge_m3_decorated";
 pub static MYSQL_URL: Lazy<String> =  Lazy::new(|| env::var("DATABASE_URL").unwrap_or("mysql://user:pw@localhost/db".to_string()));
 
 pub const USE_HYDE: bool = true;
+
+pub const COLLECOTRS: Lazy<Vec<Collector>> = Lazy::new(|| vec![
+    Collector::Rag("urska_m3_shard_bachelor".into(), 3),
+    Collector::Rag("urska_m3_shard_masters".into(), 3),
+    Collector::Rag("urska_m3_shard_phd".into(), 3),
+    Collector::Rag("urska_m3_shard_general".into(), 3),
+    Collector::Raw("urska_m3_shard_staff".into(), 3),
+    Collector::Rag("urska_m3_shard_erasmus".into(), 3),
+]);
 
 // LLM config
 pub const SYSTEM_MSG: &str = "Your name is Urška. You are a chatbot asistant at University of primorska, more specific FAMNIT. Your task is to help students in the name of student's office. Answer the student's question in the name of the student office with factual data. ";

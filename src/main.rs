@@ -8,6 +8,7 @@ mod config;
 mod wss;
 mod storage;
 mod logging;
+mod controllers;
 
 #[tokio::main]
 async fn main() -> Result<()> {

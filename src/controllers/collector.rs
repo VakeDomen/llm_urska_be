@@ -1,11 +1,15 @@
+use candle_core::Tensor;
 use qdrant_client::qdrant::SearchResponse;
+use anyhow::Result;
 
+use crate::{config::COLLECOTRS, storage::qdrant::vector_search};
 
+#[derive(Debug, Clone)]
 pub enum Collector {
-    Rag(Collection, Samples),
+    Hyde(Collection, Samples),
     Raw(Collection, Samples),
 }
-pub type Samples = usize;
+pub type Samples = u64;
 pub type Collection = String;
 
 #[derive(Debug, Clone)]
@@ -14,14 +18,36 @@ pub struct Passage {
     pub text: String,
 }
 
-pub fn sample_docs(
-    prompt: String, 
-    hyde_prompt: String,
+pub async fn sample_passages(
+    prompt_tensor: Tensor, 
+    hyde_prompt_tensor: Tensor,
     collections: Vec<String>,
-) -> Vec<Passage> {
-    vec![]
+) -> Result<Vec<Passage>> {
+    let mut passages = vec![];
+    for collection in collections {
+        if let Some(collector) = get_collector(collection) {
+            let response = match collector {
+                Collector::Hyde(col, lookups) => vector_search(hyde_prompt_tensor.clone(), col, lookups).await?,
+                Collector::Raw(col, lookups) => vector_search(prompt_tensor.clone(), col, lookups).await?,
+            };
+            for passage in extract_node_content(response) {
+                passages.push(passage);
+            }
+        }
+    }
+    Ok(passages)
 }
 
+
+fn get_collector(collection: String) -> Option<Collector> {
+    for collector in COLLECOTRS.iter() {
+        match collector {
+            Collector::Hyde(col, _) => if col.eq(&collection) { return Some(collector.clone()); },
+            Collector::Raw(col, _) => if col.eq(&collection) { return Some(collector.clone()); },
+        }
+    }
+    None
+}
 
 /// Extracts the content of nodes from a search response into a vector of strings.
 ///

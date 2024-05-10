@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use qdrant_client::{client::QdrantClient, qdrant::{SearchPoints, SearchResponse}};
 use tokio::sync::Mutex;
 use anyhow::Result;
-use crate::config::{QDRANT_COLLECTION, QDRANT_SERVER};
+use crate::{config::{QDRANT_COLLECTION, QDRANT_SERVER}, controllers::collector::{Collection, Samples}};
 
 /// Static global client for accessing the Qdrant database.
 ///
@@ -34,15 +34,19 @@ static QDRANT_CLIENT: Lazy<Mutex<QdrantClient>> = Lazy::new(|| {
 ///
 /// # Errors
 /// - Returns an error if the tensor conversion fails or if the Qdrant search query encounters issues.
-pub async fn vector_search(embedding: Tensor) -> Result<SearchResponse> {
+pub async fn vector_search(
+    embedding: Tensor,
+    collection: Collection,
+    lookups: Samples,
+) -> Result<SearchResponse> {
     // Convert the tensor to a vector of f32 values.
     let embedding_vec = embedding.to_vec2::<f32>()?.first().unwrap().clone();
     let guard = QDRANT_CLIENT.lock().await;
     let search_result = guard
         .search_points(&SearchPoints {
-            collection_name: QDRANT_COLLECTION.to_string(),
+            collection_name: collection,
             vector: embedding_vec,
-            limit: 3,
+            limit: lookups,
             with_payload: Some(true.into()),
             ..Default::default()
         })

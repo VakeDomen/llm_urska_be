@@ -13,12 +13,12 @@ pub static MYSQL_URL: Lazy<String> =  Lazy::new(|| env::var("DATABASE_URL").unwr
 pub const USE_HYDE: bool = true;
 
 pub const COLLECOTRS: Lazy<Vec<Collector>> = Lazy::new(|| vec![
-    Collector::Rag("urska_m3_shard_bachelor".into(), 3),
-    Collector::Rag("urska_m3_shard_masters".into(), 3),
-    Collector::Rag("urska_m3_shard_phd".into(), 3),
-    Collector::Rag("urska_m3_shard_general".into(), 3),
+    Collector::Hyde("urska_m3_shard_bachelor".into(), 3),
+    Collector::Hyde("urska_m3_shard_masters".into(), 3),
+    Collector::Hyde("urska_m3_shard_phd".into(), 3),
+    Collector::Hyde("urska_m3_shard_general".into(), 3),
     Collector::Raw("urska_m3_shard_staff".into(), 3),
-    Collector::Rag("urska_m3_shard_erasmus".into(), 3),
+    Collector::Hyde("urska_m3_shard_erasmus".into(), 3),
 ]);
 
 // LLM config

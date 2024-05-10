@@ -1,6 +1,6 @@
 use std::{thread, time::Duration};
 
-use crate::{config::USE_HYDE, controllers::collector::{extract_node_content, Passage}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
+use crate::{config::USE_HYDE, controllers::collector::{extract_node_content, sample_passages, Passage}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -79,6 +79,10 @@ async fn handle_prompt(
     websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     // setup
+    let collections = vec![
+        "urska_m3_shard_bachelor".into(),
+        "urska_m3_shard_general".into(),
+    ];
     let state = NewPrompt::from(question.clone());
     inc_que(socket_id.clone()).await;
     send_message(websocket, WSSMessage::Success).await?;
@@ -115,8 +119,10 @@ async fn handle_prompt(
     };
     
     // embedding
-    let emb = generate_prompt_embedding(&hyde_prompt, Some(websocket)).await?;
-    let passages = extract_node_content(vector_search(emb).await?);
+    let emb = generate_prompt_embedding(&question, Some(websocket)).await?;
+    let emb_hyde = generate_prompt_embedding(&hyde_prompt, Some(websocket)).await?;
+    // let passages = extract_node_content(vector_search(emb).await?);
+    let passages = sample_passages(emb, emb_hyde, collections).await?;
     let number_of_results = passages.len();
     for passage in &passages {
         let _ = send_message(websocket, WSSMessage::PromptPassage(passage.text.clone())).await;

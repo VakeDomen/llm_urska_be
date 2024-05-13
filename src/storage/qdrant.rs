@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use qdrant_client::{client::QdrantClient, qdrant::{SearchPoints, SearchResponse}};
 use tokio::sync::Mutex;
 use anyhow::Result;
-use crate::{config::{QDRANT_COLLECTION, QDRANT_SERVER}, controllers::collector::{Collection, Samples}};
+use crate::{config::QDRANT_SERVER, controllers::collector::{Collection, Samples}};
 
 /// Static global client for accessing the Qdrant database.
 ///

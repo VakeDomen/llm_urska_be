@@ -3,7 +3,7 @@ use candle_core::Tensor;
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
 
-use crate::{llm::loader::load_bert_model, logging::flush::{flush_message, FlushType}};
+use crate::logging::flush::{flush_message, FlushType};
 
 use super::loader::EMBEDDING_MODEL;
 

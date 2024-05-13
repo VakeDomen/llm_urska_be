@@ -1,10 +1,18 @@
 use std::{thread, time::Duration};
 
-use crate::{config::USE_HYDE, controllers::{collector::{extract_node_content, sample_passages, Passage}, reranker::rerank}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
+use crate::{
+    config::USE_HYDE, 
+    controllers::{collector::sample_passages, reranker::rerank}, 
+    llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, 
+    storage::{
+        cache_wss::{dec_que, inc_que, que_len, que_pos}, 
+        models::prompt::NewPrompt, 
+        mysql::insert_prompt,
+    }
+};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
-use qdrant_client::qdrant::SearchResponse;
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
 

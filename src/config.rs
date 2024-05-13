@@ -7,7 +7,6 @@ use crate::{controllers::collector::Collector, llm::{loader::LoadType, model::Mo
 // WSS Config
 pub const LISTEN_ADDRESS: &str = "127.0.0.1:6668";
 pub const QDRANT_SERVER: &str = "http://localhost:6334";
-pub const QDRANT_COLLECTION: &str = "urska_bge_m3_decorated";
 pub static MYSQL_URL: Lazy<String> =  Lazy::new(|| env::var("DATABASE_URL").unwrap_or("mysql://user:pw@localhost/db".to_string()));
 
 pub const USE_HYDE: bool = true;

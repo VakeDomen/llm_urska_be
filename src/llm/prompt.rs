@@ -7,7 +7,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     config::{
-        HYDE_MODEL_ARCITECTURE, HYDE_SYSTEM_MSG, MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
+        HYDE_MODEL_ARCITECTURE, HYDE_SYSTEM_MSG, MODEL_ARCITECTURE, REPEAT_LAST_N, REPEAT_PENALTY, RERANKER_MODEL_ARCITECTURE, RERANK_SYSTEM_MSG, SAMPLE_LEN, SPLIT_PROPMT, SYSTEM_MSG, SYSTEM_RAG_MSG, VERBOSE_PROMPT
     }, controllers::collector::Passage, llm::{
         loader::{
             assign_model, ModelSelector, MODEL1, MODEL2
@@ -17,7 +17,7 @@ use crate::{
     }, logging::flush::{flush_message, FlushType}
 };
 
-use super::loader::{HYDE_MODEL1, HYDE_MODEL2};
+use super::loader::{HYDE_MODEL1, HYDE_MODEL2, RERANK_MODEL1, RERANK_MODEL2};
 
 /// Represents different types of prompts that can be processed by the system.
 ///
@@ -29,7 +29,9 @@ pub enum Prompt {
     /// Represents a question accompanied by a set of relevant passages, used for RAG.
     RagPrompt(String, Vec<Passage>),
     /// Represents a question that should generate imaginary context information.
-    Hyde(String)
+    Hyde(String),
+    /// Represents a reranker evaluation of the context information. question | passage
+    Rerank(String, Passage)
 }
 
 /// Parses a `Prompt` into a formatted string that can be used as input to an LLM.
@@ -46,6 +48,7 @@ pub fn parse_prompt_to_raw(prompt: Prompt) -> String {
         Prompt::PlainQuestion(prompt) => plain_question_prompt(prompt),
         Prompt::RagPrompt(prompt, passages) => rag_prompt(prompt, passages),
         Prompt::Hyde(prompt) => hyde_prompt(prompt),
+        Prompt::Rerank(question, passage) => rerank_passage_prompt(question, passage),
     }
 }
 
@@ -70,6 +73,23 @@ pub fn rag_prompt(prompt: String, passages: Vec<Passage>) -> String {
     }
 }
 
+pub fn rerank_passage_prompt(prompt: String, passage: Passage) -> String {
+    match RERANKER_MODEL_ARCITECTURE {
+        super::model::ModelArchitecture::Llama3 => llama3_rerank_prompt(prompt, passage),
+        super::model::ModelArchitecture::Mixtral => mixtral_rerank_prompt(prompt, passage),
+    }
+}
+
+pub fn llama3_rerank_prompt(prompt: String, passage: Passage) -> String {
+    let user_msg = format!("Question: {}\n\nPassage: {:?}\n\nRelevant: ", prompt, passage);
+    llama3_prompt(RERANK_SYSTEM_MSG, user_msg)
+}
+
+
+pub fn mixtral_rerank_prompt(prompt: String, passage: Passage) -> String {
+    let user_msg = format!("Question: {}\n\nPassage: {:?}\n\nRelevant: ", prompt, passage);
+    mixtral_prompt(RERANK_SYSTEM_MSG, user_msg)
+}
 /// Formats a plain user message for processing by a Llama3 model.
 ///
 /// This function prepares a plain text message by incorporating predefined system messages for consistency in LLM input.
@@ -156,10 +176,12 @@ pub fn mixtral_rag_prompt(user_msg: String, passages: Vec<Passage>) -> String {
 }
 
 
-pub fn get_eos_token(hyde: bool) -> String {
-    let architecutre = match hyde {
-        true => HYDE_MODEL_ARCITECTURE,
-        false => MODEL_ARCITECTURE,
+pub fn get_eos_token(hyde: bool, reranker: bool) -> String {
+    let architecutre = match (hyde, reranker) {
+        (true, false)   => HYDE_MODEL_ARCITECTURE,
+        (false, true)   => RERANKER_MODEL_ARCITECTURE,
+        (false, false)  => MODEL_ARCITECTURE,
+        _ => MODEL_ARCITECTURE
     };
     match architecutre {
         super::model::ModelArchitecture::Llama3 => "<|eot_id|>".to_owned(),
@@ -187,18 +209,26 @@ pub fn get_eos_token(hyde: bool) -> String {
 /// - Any interaction with the WebSocket that fails will also propagate as an error.
 pub async fn prompt_model(
     prompt: Prompt,
-    hyde: bool,
+    
     mut websocket: Option<&mut WebSocketStream<TcpStream>>
 ) -> Result<String> {
 
     flush_message("Assigning LLM model...", &mut websocket, FlushType::Status).await?;
 
-    let model_selector = assign_model(hyde).await;
-    let mut loaded_model = match model_selector {
+    let (hyde, rerank) = match &prompt {
+        Prompt::PlainQuestion(_) => (false, false),
+        Prompt::RagPrompt(_, _)  => (false, false),
+        Prompt::Hyde(_)          => (true, false),
+        Prompt::Rerank(_, _)     => (false, true),
+    };
+
+    let mut loaded_model = match assign_model(hyde, rerank).await {
         ModelSelector::First => MODEL1.lock().await,
         ModelSelector::Second => MODEL2.lock().await,
         ModelSelector::HydeFirst => HYDE_MODEL1.lock().await,
         ModelSelector::HydeSecond => HYDE_MODEL2.lock().await,
+        ModelSelector::RerankFirst => HYDE_MODEL1.lock().await,
+        ModelSelector::RerankSecond => HYDE_MODEL2.lock().await,
     };
     
     let tokenizer = loaded_model.1.clone();
@@ -278,7 +308,7 @@ pub async fn prompt_model(
     }
 
     // Continue generating tokens until the sample length is reached or an end-of-sentence token is encountered.
-    let eos_token = get_eos_token(hyde);
+    let eos_token = get_eos_token(hyde, rerank);
     let eos_token = *tos.tokenizer().get_vocab(true).get(&eos_token).unwrap();
     let start_post_prompt = std::time::Instant::now();
     let mut sampled = 0;

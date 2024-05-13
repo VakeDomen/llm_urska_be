@@ -12,7 +12,7 @@ use log::{info, error};
 use once_cell::sync::Lazy;
 use tokenizers::Tokenizer;
 
-use crate::config::{EMBEDDING_MODEL_PATH, EMBEDDING_MODEL_TYPE, EMBEDDING_TOKENIZER, HYDE_MODEL_PATH, HYDE_TOKENIZER_PATH, MODEL_PATH, TOKENIZER_PATH};
+use crate::config::{EMBEDDING_MODEL_PATH, EMBEDDING_MODEL_TYPE, EMBEDDING_TOKENIZER, HYDE_MODEL_PATH, HYDE_TOKENIZER_PATH, MODEL_PATH, RERANKER_MODEL_PATH, RERANKER_TOKENIZER_PATH, TOKENIZER_PATH};
 
 pub type LoadedModel = (ModelWeights, Tokenizer, Device, usize);
 pub type LoadedEmbeddingModel = (BertModel, Tokenizer, Device);
@@ -27,6 +27,8 @@ pub enum ModelSelector {
     Second,
     HydeFirst,
     HydeSecond,
+    RerankFirst,
+    RerankSecond,
 }
 
 pub enum LoadType {
@@ -73,6 +75,24 @@ pub static HYDE_MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
     }
 });
 
+/// Static global state holding the first loaded model.
+/// Panics if the model fails to load during initialization.
+pub static RERANK_MODEL1: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
+    match load_llm_model(RERANKER_MODEL_PATH, RERANKER_TOKENIZER_PATH, Some(0)) {
+        Ok(m) => Mutex::new(m),
+        Err(e) => panic!("Can't lazy load reranker model: {:#?}", e),
+    }
+});
+
+/// Static global state holding the second loaded model.
+/// Panics if the model fails to load during initialization.
+pub static RERANK_MODEL2: Lazy<Mutex<LoadedModel>> = Lazy::new(|| {
+    match load_llm_model(RERANKER_MODEL_PATH, RERANKER_TOKENIZER_PATH, Some(1)) {
+        Ok(m) => Mutex::new(m),
+        Err(e) => panic!("Can't lazy load reranker model: {:#?}", e),
+    }
+});
+
 pub static EMBEDDING_MODEL: Lazy<Mutex<LoadedEmbeddingModel>> = Lazy::new(|| {
     match load_bert_model(Some(1)) {
         Ok(m) => Mutex::new(m),
@@ -87,13 +107,21 @@ pub static EMBEDDING_MODEL: Lazy<Mutex<LoadedEmbeddingModel>> = Lazy::new(|| {
 ///
 /// # Returns
 /// Returns `ModelSelector::First` if the first model is selected, otherwise returns `ModelSelector::Second`.
-pub async fn assign_model(hyde: bool) -> ModelSelector {
+pub async fn assign_model(hyde: bool, rerank: bool) -> ModelSelector {
     let mut toggle = MODEL_TOGGLER.lock().await;
     if hyde {
         if *toggle == 0 {
             return ModelSelector::HydeFirst;
         } else {
             return ModelSelector::HydeSecond;
+        }
+    }
+
+    if rerank {
+        if *toggle == 0 {
+            return ModelSelector::RerankFirst;
+        } else {
+            return ModelSelector::RerankSecond;
         }
     }
     

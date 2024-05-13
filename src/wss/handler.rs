@@ -1,6 +1,6 @@
 use std::{thread, time::Duration};
 
-use crate::{config::USE_HYDE, controllers::collector::{extract_node_content, sample_passages, Passage}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
+use crate::{config::USE_HYDE, controllers::{collector::{extract_node_content, sample_passages, Passage}, reranker::rerank}, llm::{embedding::generate_prompt_embedding, prompt::{prompt_model, Prompt}}, storage::{cache_wss::{dec_que, inc_que, que_len, que_pos}, models::prompt::NewPrompt, mysql::insert_prompt, qdrant::vector_search}};
 
 use super::{message::WSSMessage, operations::send_message};
 use anyhow::Result;
@@ -104,7 +104,7 @@ async fn handle_prompt(
     // hyde
     let (hyde_prompt, state) = if USE_HYDE {
         let state = state.hyde_generation();
-        match prompt_model(Prompt::Hyde(question.clone()), true, Some(websocket)).await {
+        match prompt_model(Prompt::Hyde(question.clone()), Some(websocket)).await {
             Ok(generated_response) => {
                 send_message(websocket, WSSMessage::PromptResponse(generated_response.clone())).await?;
                 (generated_response.clone(), state.start_embedding(generated_response))
@@ -123,6 +123,7 @@ async fn handle_prompt(
     let emb_hyde = generate_prompt_embedding(&hyde_prompt, Some(websocket)).await?;
     // let passages = extract_node_content(vector_search(emb).await?);
     let passages = sample_passages(emb, emb_hyde, collections).await?;
+    let passages = rerank(question.clone(), passages, websocket).await?;
     let number_of_results = passages.len();
     for passage in &passages {
         let _ = send_message(websocket, WSSMessage::PromptPassage(passage.text.clone())).await;
@@ -134,7 +135,7 @@ async fn handle_prompt(
 
     // final response
     let state = state.start_responding(passages);
-    let response = match prompt_model(prompt, false, Some(websocket)).await {
+    let response = match prompt_model(prompt, Some(websocket)).await {
         Ok(generated_response) => {
             send_message(websocket, WSSMessage::PromptResponse(generated_response.clone())).await?;
             generated_response

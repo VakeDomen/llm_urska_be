@@ -11,6 +11,7 @@ pub static MYSQL_URL: Lazy<String> =  Lazy::new(|| env::var("DATABASE_URL").unwr
 
 pub const USE_HYDE: bool = true;
 
+pub const DEFAULT_COLLECTION: &str = "urska_m3_shard_general"; // used if no collection specified
 pub const COLLECOTRS: Lazy<Vec<Collector>> = Lazy::new(|| vec![
     Collector::Hyde("urska_m3_shard_bachelor".into(), 7),
     Collector::Hyde("urska_m3_shard_masters".into(), 7),

@@ -33,7 +33,7 @@ pub async fn handle(
     websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     match msg {
-        WSSMessage::Prompt(question) => handle_prompt(question, socket_id, websocket).await,
+        WSSMessage::Prompt(question, collections) => handle_prompt(question, collections, socket_id, websocket).await,
         WSSMessage::QueueLen => handle_que_len(websocket).await,
         WSSMessage::QueuePos => handle_que_pos(socket_id, websocket).await,
         _ => Ok(())
@@ -83,14 +83,11 @@ async fn handle_que_pos(
 /// Forwards any errors encountered during processing. Returns `Ok(())` if processing is completed successfully.
 async fn handle_prompt(
     question: String,
+    collections: Vec<String>,
     socket_id: String, 
     websocket: &mut WebSocketStream<TcpStream>
 ) -> Result<()> {
     // setup
-    let collections = vec![
-        "urska_m3_shard_bachelor".into(),
-        "urska_m3_shard_general".into(),
-    ];
     let state = NewPrompt::from(question.clone());
     inc_que(socket_id.clone()).await;
     send_message(websocket, WSSMessage::Success).await?;

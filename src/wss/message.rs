@@ -10,7 +10,7 @@ use tokio_tungstenite::tungstenite::Message;
 #[derive(Debug, Serialize)]
 pub enum WSSMessage {
     /// Command from client requesting processing of a prompt.
-    Prompt(String),
+    Prompt(String, Vec<String>), // question, vec<collections>
     /// Command from client to retrieve the current queue length.
     QueueLen,
     /// Command from client to retrieve the current queue position.
@@ -53,14 +53,7 @@ impl From<Message> for WSSMessage {
 
         // parse game command
         if message_string.starts_with("Prompt ") {
-            let tokens: Vec<&str> = message_string.splitn(2, ' ').collect();
-            if tokens.len() < 2 {
-                error!("[WSS message parser] Invalid QUESTION command format.");
-                return Self::Unknown;
-            }
-
-            let question_string = tokens[1].to_string();
-            return Self::Prompt(question_string);
+            return parse_prompt_msg(message_string);
         } 
 
         if message_string.eq("QueueLen") {
@@ -73,6 +66,38 @@ impl From<Message> for WSSMessage {
 
         Self::Unknown
     }
+}
+
+fn parse_prompt_msg(message_string: String) -> WSSMessage {
+    let parts: Vec<&str> = message_string
+        .splitn(2, ' ')
+        .collect();
+    
+    if parts.len() < 2 {
+        error!("[WSS message parser] Invalid QUESTION command format.");
+        return WSSMessage::Unknown;
+    }
+
+    let prompt_string = parts[1].to_string();
+    
+    let prompt_parts: Vec<&str> = prompt_string
+        .splitn(2, ' ')
+        .collect();
+
+    if prompt_parts.len() < 2 {
+        return WSSMessage::Prompt(prompt_string, vec![]);
+    }
+    
+    let question_string = prompt_parts[1].to_string();    
+    // assume first part is collections to prompt sparated by comma and no space -> col1,col3,col4
+    let collections: Vec<String> = prompt_parts[0]
+        .to_string()
+        .split(',')
+        .map(|s| s.to_string())
+        .collect();
+
+    
+    WSSMessage::Prompt(question_string, collections)
 }
 
 /// Converts a `WSSMessage` back into a WebSocket `Message` by serializing it to a JSON string.

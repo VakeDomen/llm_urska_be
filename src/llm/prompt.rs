@@ -17,7 +17,7 @@ use crate::{
     }, logging::flush::{flush_message, FlushType}
 };
 
-use super::loader::{HYDE_MODEL1, HYDE_MODEL2, RERANK_MODEL1, RERANK_MODEL2};
+use super::loader::{HYDE_MODEL1, HYDE_MODEL2};
 
 /// Represents different types of prompts that can be processed by the system.
 ///

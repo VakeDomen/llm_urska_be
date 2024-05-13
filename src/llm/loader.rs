@@ -305,7 +305,7 @@ fn load_safetensors_bert_model_from_disk(model_path: &str, device: &Device) -> R
     };
     let model_path_string = format!("{}/model.safetensors", model_path);
     let model_path = Path::new(&model_path_string);
-    let vb = match unsafe { VarBuilder::from_mmaped_safetensors(&vec![model_path], DTYPE, device) }{
+    let vb = match unsafe { VarBuilder::from_mmaped_safetensors(&[model_path], DTYPE, device) }{
         Ok(c) => c,
         Err(e) => {
             println!("Failed parsing VarBuilder from PytorchBin model path: {:#?}", e);

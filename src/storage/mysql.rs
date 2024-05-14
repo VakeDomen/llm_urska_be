@@ -9,6 +9,7 @@ use anyhow::Result;
 
 use crate::config::MYSQL_URL;
 use crate::llm::prompt::Prompt;
+use crate::wss::message::Rating;
 
 use super::models::prompt::InsertablePrompt;
 
@@ -68,4 +69,42 @@ pub fn insert_prompt(prompt: InsertablePrompt) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+pub fn rate_response(id: String, rating: Rating) -> Result<()> {
+    let mut conn = get_db_conn()?;
+    let rating_value = rating_value(rating);
+    conn.exec_drop(
+        r"UPDATE prompts
+            SET rating=:rating
+            WHERE id=:id",
+        params! {
+            "id" => id,
+            "rating" => rating_value,
+        },
+    )?;
+    Ok(())
+}
+
+pub fn rate_passage(id: String, rating: Rating) -> Result<()> {
+    let mut conn = get_db_conn()?;
+    let rating_value = rating_value(rating);
+    conn.exec_drop(
+        r"UPDATE lookups
+            SET rating=:rating
+            WHERE id=:id",
+        params! {
+            "id" => id,
+            "rating" => rating_value,
+        },
+    )?;
+    Ok(())
+}
+
+fn rating_value(rating: Rating) -> Option<i64> {
+    match rating {
+        Rating::Positive => Some(1),
+        Rating::Neutral => None,
+        Rating::Negative =>  Some(-1),
+    }
 }

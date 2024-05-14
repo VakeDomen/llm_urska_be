@@ -7,11 +7,11 @@ use crate::{
     storage::{
         cache_wss::{dec_que, inc_que, que_len, que_pos}, 
         models::prompt::NewPrompt, 
-        mysql::insert_prompt,
+        mysql::{insert_prompt, rate_passage, rate_response},
     }
 };
 
-use super::{message::WSSMessage, operations::send_message};
+use super::{message::{Rating, WSSMessage}, operations::send_message};
 use anyhow::Result;
 use tokio::net::TcpStream;
 use tokio_tungstenite::WebSocketStream;
@@ -36,7 +36,31 @@ pub async fn handle(
         WSSMessage::Prompt(question, collections) => handle_prompt(question, collections, socket_id, websocket).await,
         WSSMessage::QueueLen => handle_que_len(websocket).await,
         WSSMessage::QueuePos => handle_que_pos(socket_id, websocket).await,
+        WSSMessage::RatePassage(passage_id, rating) => handle_rate_passage(passage_id, rating, websocket).await,
+        WSSMessage::RateResponse(response_id, rating) => handle_rate_response(response_id, rating, websocket).await,
         _ => Ok(())
+    }
+}
+
+async fn handle_rate_response(
+    response_id: String, 
+    rating: Rating, 
+    websocket: &mut WebSocketStream<TcpStream>
+) -> std::prelude::v1::Result<(), anyhow::Error> {
+    match rate_response(response_id, rating) {
+        Ok(_) => send_message(websocket, WSSMessage::Success).await,
+        Err(e) => send_message(websocket, WSSMessage::Error(e.to_string())).await,
+    }
+}
+
+async fn handle_rate_passage(
+    passage_id: String, 
+    rating: Rating, 
+    websocket: &mut WebSocketStream<TcpStream>
+) -> Result<()> {
+    match rate_passage(passage_id, rating) {
+        Ok(_) => send_message(websocket, WSSMessage::Success).await,
+        Err(e) => send_message(websocket, WSSMessage::Error(e.to_string())).await,
     }
 }
 

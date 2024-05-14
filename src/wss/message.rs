@@ -3,6 +3,12 @@ use serde::Serialize;
 use serde_any::Format;
 use tokio_tungstenite::tungstenite::Message;
 
+#[derive(Debug, Serialize)]
+pub enum Rating {
+    Positive, 
+    Neutral,
+    Negative,
+}
 
 /// Represents different types of messages that can be sent between the client and server over WebSocket connections.
 ///
@@ -11,6 +17,11 @@ use tokio_tungstenite::tungstenite::Message;
 pub enum WSSMessage {
     /// Command from client requesting processing of a prompt.
     Prompt(String, Vec<String>), // question, vec<collections>
+
+    RateResponse(String, Rating),
+
+    RatePassage(String, Rating),
+
     /// Command from client to retrieve the current queue length.
     QueueLen,
     /// Command from client to retrieve the current queue position.
@@ -56,6 +67,14 @@ impl From<Message> for WSSMessage {
             return parse_prompt_msg(message_string);
         } 
 
+        if message_string.starts_with("RateResponse ") {
+            return parse_rate_resonse(message_string);
+        }
+
+        if message_string.starts_with("RatePassage ") {
+            return parse_rate_passage(message_string);
+        }
+
         if message_string.eq("QueueLen") {
             return Self::QueueLen;
         }
@@ -65,6 +84,45 @@ impl From<Message> for WSSMessage {
         }
 
         Self::Unknown
+    }
+}
+
+fn parse_rate_passage(message_string: String) -> WSSMessage {
+    let parts: Vec<&str> = message_string
+        .split(' ')
+        .collect();
+
+    if parts.len() != 3 {
+        error!("[WSS message parser] Invalid rate passage command format.");
+        return WSSMessage::Unknown;
+    }
+
+    let passage_id = parts[1].to_string();
+    let rating = parse_rating(parts[2]);
+    WSSMessage::RatePassage(passage_id, rating)
+}
+
+fn parse_rate_resonse(message_string: String) -> WSSMessage {
+    let parts: Vec<&str> = message_string
+        .split(' ')
+        .collect();
+
+    if parts.len() != 3 {
+        error!("[WSS message parser] Invalid rate response command format.");
+        return WSSMessage::Unknown;
+    }
+
+    let response_id = parts[1].to_string();
+    let rating = parse_rating(parts[2]);
+    WSSMessage::RateResponse(response_id, rating)
+}
+
+
+fn parse_rating(rating_string: &str) -> Rating {
+    match rating_string.to_ascii_lowercase().as_str() {
+        "positive" => Rating::Positive,
+        "negative" => Rating::Negative,
+        _ => Rating::Neutral,
     }
 }
 

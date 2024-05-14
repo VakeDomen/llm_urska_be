@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use anyhow::Result;
 
 use crate::config::MYSQL_URL;
+use crate::llm::prompt::Prompt;
 
 use super::models::prompt::InsertablePrompt;
 
@@ -53,7 +54,7 @@ pub fn insert_prompt(prompt: InsertablePrompt) -> Result<()> {
     )?;
 
     // Insert into `lookups` table if docs are available
-    for doc in prompt.docs.iter() {
+    for doc in prompt.passages.iter() {
         conn.exec_drop(
             r"INSERT INTO lookups (id, prompt_id, passage_id, text, rating)
                 VALUES (:id, :prompt_id, :passage_id, :text, :rating)",

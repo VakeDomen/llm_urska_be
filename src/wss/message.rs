@@ -21,9 +21,9 @@ pub enum WSSMessage {
     /// Response to client indicating the status of a prompt processing.
     PromptStatus(String),
     /// Response to client with the result of a prompt processing.
-    PromptResponse(String),
+    PromptResponse(String, String), // id, content
     /// Response to client with the passage related to the prompt.
-    PromptPassage(String),
+    PromptPassage(String, String), // id, content
     /// Response to client with tokenized elements of the prompt response.
     PromptResponseToken(String),
     /// Response to client with the current queue length.

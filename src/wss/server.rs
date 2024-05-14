@@ -19,8 +19,8 @@ use super::{handler::handle, message::WSSMessage, operations::{get_message, remo
 pub async fn start_server() {
     let listener = TcpListener::bind(LISTEN_ADDRESS).await.expect("[WSS] Can't listen");
     info!("[WSS] Web socket server started: {}", LISTEN_ADDRESS);
-    while let Ok((stream, _)) = listener.accept().await {
-        info!("[WSS] New Connection");
+    while let Ok((stream, addr)) = listener.accept().await {
+        info!("[WSS] New Connection: {:?}", addr);
         let peer = stream.peer_addr().expect("[WSS] connected streams should have a peer address");
         tokio::spawn(accept_connection(peer, stream));
     }

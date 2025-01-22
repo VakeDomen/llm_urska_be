@@ -28,9 +28,14 @@ pub const HYDE_SYSTEM_MSG: &str = "Your task is to generate a short markdown pas
 pub const RERANK_SYSTEM_MSG: &str = "You will be given a question and a text passage. Your task is to evaluate wether a text passsage contains information that is relefant to a question. Your taks is to answer with 'true' or 'false' if relevant information to the question can be found in the passage or it contains links that lead to relevant information. ";
 
 
-pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Mixtral;
-pub const MODEL_PATH: &str = "models/mixtral8x7b/mixtral-8x7b-instuct-v0.1Q5_K_M.gguf";
-pub const TOKENIZER_PATH: &str = "models/mixtral8x7b/tokenizer.json";
+// pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Mixtral;
+// pub const MODEL_PATH: &str = "models/mixtral8x7b/mixtral-8x7b-instuct-v0.1Q5_K_M.gguf";
+// pub const TOKENIZER_PATH: &str = "models/mixtral8x7b/tokenizer.json";
+
+
+pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Phi3;
+pub const MODEL_PATH: &str = "models/phi3-medium-128k-instruct/Phi-3-medium-128k-instruct-Q8_0.gguf";
+pub const TOKENIZER_PATH: &str = "models/phi3-medium-128k-instruct/tokenizer.json";
 
 // pub const MODEL_ARCITECTURE: ModelArchitecture = ModelArchitecture::Llama3;
 // pub const MODEL_PATH: &str =  "models/llama3-70b/Meta-Llama-3-70B-Instruct.Q4_K_S.gguf";

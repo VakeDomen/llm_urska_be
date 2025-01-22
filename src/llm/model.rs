@@ -6,6 +6,7 @@ use crate::config::{SEED, TEMPERATURE, TOP_K, TOP_P};
 pub enum ModelArchitecture {
     Llama3,
     Mixtral,
+    Phi3,
 }
 
 

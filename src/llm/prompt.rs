@@ -56,6 +56,7 @@ pub fn plain_question_prompt(prompt: String) -> String {
     match MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_prompt(SYSTEM_MSG, prompt),
         super::model::ModelArchitecture::Mixtral => mixtral_prompt(SYSTEM_MSG, prompt),
+        super::model::ModelArchitecture::Phi3 => phi3_prompt(SYSTEM_MSG, prompt),
     }
 }
 
@@ -63,6 +64,7 @@ pub fn hyde_prompt(prompt: String) -> String {
     match HYDE_MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_prompt(HYDE_SYSTEM_MSG, prompt),
         super::model::ModelArchitecture::Mixtral => mixtral_prompt(HYDE_SYSTEM_MSG, prompt),
+        super::model::ModelArchitecture::Phi3 => phi3_prompt(HYDE_SYSTEM_MSG, prompt),
     }
 }
 
@@ -70,6 +72,7 @@ pub fn rag_prompt(prompt: String, passages: Vec<Passage>) -> String {
     match MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_rag_prompt(prompt, passages),
         super::model::ModelArchitecture::Mixtral => mixtral_rag_prompt(prompt, passages),
+        super::model::ModelArchitecture::Phi3 => phi3_rag_prompt(prompt, passages),
     }
 }
 
@@ -77,6 +80,7 @@ pub fn rerank_passage_prompt(prompt: String, passage: Passage) -> String {
     match RERANKER_MODEL_ARCITECTURE {
         super::model::ModelArchitecture::Llama3 => llama3_rerank_prompt(prompt, passage),
         super::model::ModelArchitecture::Mixtral => mixtral_rerank_prompt(prompt, passage),
+        super::model::ModelArchitecture::Phi3 => phi3_rerank_prompt(prompt, passage),
     }
 }
 
@@ -89,6 +93,34 @@ pub fn llama3_rerank_prompt(prompt: String, passage: Passage) -> String {
 pub fn mixtral_rerank_prompt(prompt: String, passage: Passage) -> String {
     let user_msg = format!("Question: {}\n\nPassage: {:?}\n\nRelevant: ", prompt, passage);
     mixtral_prompt(RERANK_SYSTEM_MSG, user_msg)
+}
+
+pub fn phi3_rerank_prompt(prompt: String, passage: Passage) -> String {
+    let user_msg = format!("Question: {}\n\nPassage: {:?}\n\nRelevant: ", prompt, passage);
+    phi3_prompt(RERANK_SYSTEM_MSG, user_msg)
+}
+
+fn phi3_prompt(system_msg: &str, user_msg: String) -> String {
+    format!(
+        "<|user|>\n{}\n\n{} <|end|>\n<|assistant|>", 
+        system_msg,
+        user_msg
+    )
+}
+
+fn phi3_rag_prompt(user_msg: String, passages: Vec<Passage>) -> String {
+    let passage_string = passages
+        .iter()
+        .map(|p| p.text.clone())
+        .collect::<Vec<String>>()
+        .join("\n# Passage: ");
+
+    let user_msg = format!(
+        "# Passage:\n{}\n# Student question: \n{}",
+        passage_string,
+        user_msg
+    );
+    phi3_prompt(SYSTEM_RAG_MSG, user_msg)
 }
 /// Formats a plain user message for processing by a Llama3 model.
 ///
@@ -186,6 +218,7 @@ pub fn get_eos_token(hyde: bool, reranker: bool) -> String {
     match architecutre {
         super::model::ModelArchitecture::Llama3 => "<|eot_id|>".to_owned(),
         super::model::ModelArchitecture::Mixtral => "</s>".to_owned(),
+        super::model::ModelArchitecture::Phi3 => "<|end|>".to_owned(),
     }
 }
 
